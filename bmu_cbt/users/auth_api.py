@@ -122,8 +122,6 @@ def login(request, payload: LoginSchema):
         "full_name": f"{user.first_name} {user.last_name}".strip(),
         "user_type": user.user_type,
         "profile_picture": profile_picture_url,
-        "is_superuser": user.is_superuser,
-        "is_staff": user.is_staff,
     }
 
 

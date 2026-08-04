@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { getApiUrl } from '@/config/api'
 
 interface ScreenRecorderProps {
   examId: number
@@ -115,7 +116,7 @@ export default function ScreenRecorder({ examId, attemptId, token, isActive }: S
       formData.append('attempt_id', attemptId.toString())
       formData.append('timestamp', Date.now().toString())
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/results/${attemptId}/upload-screen-recording/`, {
+      const response = await fetch(`${getApiUrl()}/results/${attemptId}/upload-screen-recording/`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`

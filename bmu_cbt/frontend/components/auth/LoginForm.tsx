@@ -16,7 +16,7 @@ export default function LoginForm() {
     e.preventDefault()
     setIsLoading(true)
     
-    const success = await login(username, password)
+    const success = await login(username.trim(), password)
     
     // Always set loading to false after login attempt
     setIsLoading(false)

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { getApiUrl } from '@/config/api'
 
 interface WebcamMonitorProps {
   examId: number
@@ -106,7 +107,7 @@ export default function WebcamMonitor({ examId, attemptId, token, isActive }: We
       formData.append('attempt_id', attemptId.toString())
       formData.append('timestamp', Date.now().toString())
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/results/${attemptId}/upload-webcam-image/`, {
+      const response = await fetch(`${getApiUrl()}/results/${attemptId}/upload-webcam-image/`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`

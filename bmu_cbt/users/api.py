@@ -1,4 +1,5 @@
 from ninja import Router
+from ninja.errors import HttpError
 from bmu_cbt.ninja_auth import JWTAuth
 from pydantic import BaseModel
 from typing import List, Optional
@@ -131,7 +132,7 @@ def get_active_user_sessions(request):
 def download_bulk_upload_template(request):
     """Download CSV template for bulk student upload"""
     if not request.user.is_superuser:
-        return {"error": "Admin access required"}
+        raise HttpError(403, "Admin access required")
     
     # Create CSV template
     output = io.StringIO()
@@ -173,7 +174,7 @@ def download_bulk_upload_template(request):
 def process_bulk_student_data(request, students_data: List[BulkStudentUploadSchema]):
     """Process bulk student data and create accounts"""
     if not request.user.is_superuser:
-        return {"error": "Admin access required"}
+        raise HttpError(403, "Admin access required")
     
     successful = []
     failed = []
@@ -245,7 +246,7 @@ def process_bulk_student_data(request, students_data: List[BulkStudentUploadSche
 def export_credentials_csv(request):
     """Export student credentials as CSV for printing"""
     if not request.user.is_superuser:
-        return {"error": "Admin access required"}
+        raise HttpError(403, "Admin access required")
     
     # Get recently created students (those with temporary passwords)
     recent_students = User.objects.filter(
@@ -287,6 +288,9 @@ def export_credentials_csv(request):
             student.course or ''
         ]
         writer.writerow(row)
+    
+    # Clear temporary plain passwords after export
+    recent_students.update(temporary_plain_password=None)
     
     # Create HTTP response
     response = HttpResponse(

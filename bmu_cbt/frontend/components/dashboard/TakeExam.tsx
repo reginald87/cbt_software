@@ -160,23 +160,14 @@ export default function TakeExam({ examId, attemptId, endTimeMs, onExit }: TakeE
       setError(null)
       setSubmitError(null)
 
-      console.log('DEBUG: Fetching exam and questions for examId:', examId)
-
       const [examRes, qRes] = await Promise.all([
         api.get(`/exams/${examId}/`),
         api.get(`/exams/${examId}/questions/`),
       ])
 
-      console.log('DEBUG: Exam response:', examRes.data)
-      console.log('DEBUG: Questions response:', qRes.data)
-
       setExam(examRes.data)
       setQuestions(qRes.data || [])
       setActiveIndex(0)
-      
-      if (!qRes.data || qRes.data.length === 0) {
-        console.warn('WARNING: No questions found for exam', examId)
-      }
     } catch (e: any) {
       console.error('ERROR: Failed to fetch exam and questions:', e)
       console.error('ERROR response:', e.response?.data)

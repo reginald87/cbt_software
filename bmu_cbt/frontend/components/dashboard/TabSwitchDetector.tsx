@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { getApiUrl } from '@/config/api'
 
 interface TabSwitchDetectorProps {
   examId: number
@@ -37,7 +38,7 @@ export default function TabSwitchDetector({ examId, attemptId, token, isActive }
     eventsRef.current.push(event)
 
     try {
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/results/${attemptId}/log-tab-switch/`, {
+      await fetch(`${getApiUrl()}/results/${attemptId}/log-tab-switch/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -258,10 +259,6 @@ export default function TabSwitchDetector({ examId, attemptId, token, isActive }
         </div>
       )}
 
-      {/* Hidden indicator for debugging (remove in production) */}
-      <div className="fixed bottom-4 right-4 text-xs text-gray-400 opacity-50">
-        Tab Switches: {warningCount}/{MAX_WARNINGS}
-      </div>
     </>
   )
 }

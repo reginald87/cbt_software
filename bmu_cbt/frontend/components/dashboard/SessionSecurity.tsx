@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
+import { getApiUrl } from '@/config/api'
 
 interface SessionSecurityProps {
   examId: number
@@ -23,7 +24,7 @@ export default function SessionSecurity({ examId, attemptId, token, isActive }: 
     try {
       setIsChecking(true)
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/results/${attemptId}/check-session/`, {
+      const response = await fetch(`${getApiUrl()}/results/${attemptId}/check-session/`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -67,7 +68,7 @@ export default function SessionSecurity({ examId, attemptId, token, isActive }: 
     
     // Send activity update to server
     if (isActive) {
-      fetch(`${process.env.NEXT_PUBLIC_API_URL}/results/${attemptId}/update-activity/`, {
+      fetch(`${getApiUrl()}/results/${attemptId}/update-activity/`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -107,7 +108,7 @@ export default function SessionSecurity({ examId, attemptId, token, isActive }: 
     if (anomalies.length > 0 && isActive) {
       console.warn('Environment anomalies detected:', anomalies)
       
-      fetch(`${process.env.NEXT_PUBLIC_API_URL}/results/${attemptId}/log-anomaly/`, {
+      fetch(`${getApiUrl()}/results/${attemptId}/log-anomaly/`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -193,7 +194,7 @@ export default function SessionSecurity({ examId, attemptId, token, isActive }: 
     const handleBlur = () => {
       if (isActive) {
         // Log window blur
-        fetch(`${process.env.NEXT_PUBLIC_API_URL}/results/${attemptId}/log-window-blur/`, {
+        fetch(`${getApiUrl()}/results/${attemptId}/log-window-blur/`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,

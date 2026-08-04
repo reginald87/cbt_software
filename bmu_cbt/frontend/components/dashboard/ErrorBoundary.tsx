@@ -41,6 +41,9 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
 }
 
 function DefaultErrorFallback({ error, reset }: { error?: Error; reset: () => void }) {
+  if (error) {
+    console.error('ErrorBoundary caught:', error)
+  }
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-6 text-center">
@@ -51,7 +54,7 @@ function DefaultErrorFallback({ error, reset }: { error?: Error; reset: () => vo
         </div>
         <h2 className="text-xl font-semibold text-gray-900 mb-2">Something went wrong</h2>
         <p className="text-gray-600 mb-6">
-          {error?.message || 'An unexpected error occurred. Please try again.'}
+          An unexpected error occurred. Please try refreshing the page.
         </p>
         <button
           onClick={reset}

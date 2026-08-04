@@ -3,6 +3,7 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from pydantic import BaseModel
 from typing import List, Optional
+from datetime import timedelta
 import uuid
 from results.models import ExamAttempt, StudentAnswer, Notification
 from results.utils import export_exam_results_to_csv, export_student_performance_csv
@@ -214,7 +215,7 @@ def get_student_attempts(request):
 def debug_attempt(request, attempt_id: int):
     """Debug a specific attempt to see what's wrong"""
     if not request.user.is_superuser:
-        return {"error": "Admin access required"}
+        raise HttpError(403, "Admin access required")
     
     attempt = get_object_or_404(ExamAttempt, id=attempt_id)
     
@@ -256,7 +257,7 @@ def debug_attempt(request, attempt_id: int):
 def regrade_all_attempts(request):
     """Manually regrade all submitted attempts (admin only)"""
     if not request.user.is_superuser:
-        return {"error": "Admin access required"}
+        raise HttpError(403, "Admin access required")
     
     attempts = ExamAttempt.objects.filter(
         status__in=['submitted', 'graded']
@@ -297,7 +298,7 @@ def regrade_all_attempts(request):
 def get_active_exams(request):
     """Get currently active exams with statistics"""
     if not request.user.is_superuser:
-        return {"error": "Admin access required"}
+        raise HttpError(403, "Admin access required")
     
     from django.utils import timezone
     from datetime import timedelta
@@ -355,7 +356,7 @@ def get_active_exams(request):
 def get_active_attempts(request):
     """Get all currently active exam attempts"""
     if not request.user.is_superuser:
-        return {"error": "Admin access required"}
+        raise HttpError(403, "Admin access required")
     
     from django.utils import timezone
     
@@ -411,7 +412,7 @@ def get_active_attempts(request):
 def get_monitor_stats(request):
     """Get overall monitoring statistics"""
     if not request.user.is_superuser:
-        return {"error": "Admin access required"}
+        raise HttpError(403, "Admin access required")
     
     from django.utils import timezone
     from datetime import date
@@ -685,7 +686,7 @@ def log_window_blur(request, attempt_id: int, payload: dict):
 def get_security_events(request):
     """Get recent security events for monitoring"""
     if not request.user.is_superuser:
-        return {"error": "Admin access required"}
+        raise HttpError(403, "Admin access required")
     
     # This would typically query a SecurityEvent model
     # For now, we'll return mock data based on console logs
@@ -739,7 +740,7 @@ def get_security_events(request):
 def get_security_stats(request):
     """Get security monitoring statistics"""
     if not request.user.is_superuser:
-        return {"error": "Admin access required"}
+        raise HttpError(403, "Admin access required")
     
     from django.utils import timezone
     from datetime import timedelta
@@ -861,6 +862,18 @@ def submit_answer(request, attempt_id: int, payload: SubmitAnswersSchema):
     if attempt.status != 'in_progress':
         return {"error": "This exam attempt is not in progress"}
     
+    # Check if exam time has expired
+    exam_duration = timedelta(minutes=attempt.exam.duration_minutes)
+    if timezone.now() > attempt.start_time + exam_duration:
+        # Auto-submit the exam
+        attempt.status = 'submitted'
+        attempt.submitted_at = timezone.now()
+        attempt.end_time = attempt.submitted_at
+        attempt.time_taken_seconds = int((attempt.submitted_at - attempt.start_time).total_seconds())
+        attempt.save()
+        total_marks, percentage = attempt.calculate_score()
+        raise HttpError(400, "Exam time has expired. Your exam has been auto-submitted.")
+    
     question = get_object_or_404(Question, id=payload.question_id, exam=attempt.exam)
     
     # Get or create student answer
@@ -880,9 +893,8 @@ def submit_answer(request, attempt_id: int, payload: SubmitAnswersSchema):
     
     return {
         "id": student_answer.id,
-        "is_correct": student_answer.is_correct,
-        "marks_obtained": student_answer.marks_obtained,
-        "message": "Answer submitted successfully"
+        "saved": True,
+        "message": "Answer saved successfully"
     }
 
 @router.post("/{attempt_id}/submit/")
@@ -892,6 +904,10 @@ def submit_exam(request, attempt_id: int):
     
     if attempt.status != 'in_progress':
         raise HttpError(400, "This exam is not in progress")
+    
+    # Check if exam time has expired — allow late submission but record it
+    exam_duration = timedelta(minutes=attempt.exam.duration_minutes)
+    is_late = timezone.now() > attempt.start_time + exam_duration
     
     # Set submission time
     attempt.submitted_at = timezone.now()
@@ -977,7 +993,7 @@ def get_unread_count(request):
 def get_proctoring_sessions(request):
     """Get live proctoring sessions for admin monitoring"""
     if not request.user.is_superuser:
-        return {"error": "Admin access required"}
+        raise HttpError(403, "Admin access required")
     
     from django.utils import timezone
     from datetime import timedelta

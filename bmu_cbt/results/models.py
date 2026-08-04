@@ -77,42 +77,21 @@ class ExamAttempt(models.Model):
     
     def calculate_score(self):
         """Calculate the total score for this attempt"""
-        total_marks = 0
+        total_marks = sum(q.marks for q in self.exam.questions.all())
         obtained_marks = 0
         
-        # Get all answers for this attempt
-        student_answers = self.answers.all()
-        print(f"\n=== CALCULATING SCORE FOR ATTEMPT {self.id} ===")
-        print(f"Exam: {self.exam.title}")
-        print(f"Student: {self.student.username}")
-        print(f"Found {student_answers.count()} answers")
-        
-        for answer in student_answers:
-            if answer.question:
-                total_marks += answer.question.marks
-                # Use the pre-calculated is_correct field from grade_answer()
-                if answer.is_correct:
-                    obtained_marks += answer.question.marks
-                    print(f"Question {answer.question.id}: Correct (+{answer.question.marks} marks)")
-                else:
-                    print(f"Question {answer.question.id}: Incorrect (0 marks)")
-            else:
-                print(f"Answer {answer.id}: No question associated!")
-        
-        print(f"Total: {obtained_marks}/{total_marks}")
+        for answer in self.answers.select_related('question').all():
+            if answer.question and answer.is_correct:
+                obtained_marks += answer.question.marks
         
         if total_marks > 0:
             self.total_marks = obtained_marks
-            self.percentage = (obtained_marks / total_marks) * 100
+            self.percentage = round((obtained_marks / total_marks) * 100, 2)
             self.is_passed = self.percentage >= self.exam.passing_score
             self.grade = self.get_grade(self.percentage)
             self.status = 'graded'
             self.save()
-            print(f"Final Score: {self.percentage}%, Grade: {self.grade}, Passed: {self.is_passed}")
-        else:
-            print("No questions found with marks - score remains 0")
         
-        print("=== END SCORE CALCULATION ===\n")
         return self.total_marks, self.percentage
     
     def get_grade(self, percentage):
@@ -184,67 +163,61 @@ class StudentAnswer(models.Model):
     def grade_answer(self):
         """Auto-grade the answer"""
         if self.question.question_type == 'multiple' and self.selected_answer:
-            # Debug: Print the selected answer and its correctness
-            print(f"Grading: Question {self.question.id}, Selected Answer: {self.selected_answer.id}, Is Correct: {self.selected_answer.is_correct}")
             self.is_correct = self.selected_answer.is_correct
             if self.is_correct:
                 self.marks_obtained = self.question.marks
-                print(f"Correct! Awarded {self.question.marks} marks")
             else:
                 self.marks_obtained = 0
-                print(f"Incorrect. 0 marks awarded")
         elif self.question.question_type == 'true_false' and self.boolean_answer is not None:
-            # For True/False questions
-            print(f"Grading True/False: Question {self.question.id}, Answer: {self.boolean_answer}")
-            # For True/False, we need to determine the correct answer
-            # This would typically come from the question's correct_answer field
-            if hasattr(self.question, 'correct_answer') and self.question.correct_answer:
-                correct_bool = self.question.correct_answer.lower() in ['true', 't', '1']
+            if self.question.correct_answer:
+                correct_bool = self.question.correct_answer.strip().lower() in ('true', 't', '1', 'yes')
                 self.is_correct = self.boolean_answer == correct_bool
             else:
-                # Default: assume first answer option is correct for True/False
-                first_answer = self.question.answers.first()
-                if first_answer:
-                    correct_bool = first_answer.is_correct
+                # Find the correct answer from the Answer objects
+                correct_answer = self.question.answers.filter(is_correct=True).first()
+                if correct_answer:
+                    correct_bool = correct_answer.answer_text.strip().lower() in ('true', 't', '1', 'yes')
                     self.is_correct = self.boolean_answer == correct_bool
                 else:
                     self.is_correct = False
-            
-            if self.is_correct:
-                self.marks_obtained = self.question.marks
-                print(f"Correct! Awarded {self.question.marks} marks")
-            else:
-                self.marks_obtained = 0
-                print(f"Incorrect. 0 marks awarded")
+            self.marks_obtained = self.question.marks if self.is_correct else 0
         elif self.question.question_type == 'fill_blank' and self.short_answer:
-            # For fill-in-the-blank questions
-            print(f"Grading Fill Blank: Question {self.question.id}, Answer: {self.short_answer}")
             if hasattr(self.question, 'correct_answer') and self.question.correct_answer:
-                # Case-insensitive comparison for fill-in-the-blank
                 self.is_correct = self.short_answer.strip().lower() == self.question.correct_answer.strip().lower()
             else:
                 self.is_correct = False
             
             if self.is_correct:
                 self.marks_obtained = self.question.marks
-                print(f"Correct! Awarded {self.question.marks} marks")
             else:
                 self.marks_obtained = 0
-                print(f"Incorrect. 0 marks awarded")
         elif self.question.question_type == 'short':
-            # For short answers, you might want to implement manual grading
-            # For now, we'll mark them as incorrect until graded manually
             self.is_correct = False
             self.marks_obtained = 0
-            print(f"Short answer question - marking as incorrect until manual grading")
+        elif self.question.question_type in ('math', 'chemistry', 'physics', 'biology'):
+            # Science questions with answer options use MCQ-style grading
+            if self.selected_answer:
+                self.is_correct = self.selected_answer.is_correct
+                self.marks_obtained = self.question.marks if self.is_correct else 0
+            elif self.short_answer and self.question.correct_answer:
+                self.is_correct = self.short_answer.strip().lower() == self.question.correct_answer.strip().lower()
+                self.marks_obtained = self.question.marks if self.is_correct else 0
+            else:
+                self.is_correct = False
+                self.marks_obtained = 0
+        elif self.question.question_type == 'comprehension':
+            # Comprehension questions use MCQ-style grading (they have answer options)
+            if self.selected_answer:
+                self.is_correct = self.selected_answer.is_correct
+                self.marks_obtained = self.question.marks if self.is_correct else 0
+            else:
+                self.is_correct = False
+                self.marks_obtained = 0
         else:
-            # No selected answer for multiple choice
             self.is_correct = False
             self.marks_obtained = 0
-            print(f"No answer selected for question type {self.question.question_type}")
         
         self.save()
-        print(f"Final: is_correct={self.is_correct}, marks_obtained={self.marks_obtained}")
         return self.is_correct
 
 

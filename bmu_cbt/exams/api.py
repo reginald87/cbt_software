@@ -20,7 +20,7 @@ def _shuffle_seed(*parts):
     """Deterministic shuffle seed so the same student always gets the same order,
     but different students get different orders."""
     raw = '-'.join(str(p) for p in parts)
-    return int(hashlib.md5(raw.encode()).hexdigest()[:8], 16)
+    return int(hashlib.sha256(raw.encode()).hexdigest()[:8], 16)
 
 
 def _to_model_exam_status(api_status: Optional[str]) -> Optional[str]:
@@ -317,6 +317,16 @@ def get_exam_questions(request, exam_id: int):
     questions = list(exam.questions.all().order_by('order').prefetch_related('answers', 'shared_image'))
     is_admin = getattr(request.user, 'is_superuser', False)
 
+    # Share comprehension passages across questions in the same group
+    passage_cache = {}
+    for q in questions:
+        if q.comprehension_group:
+            if q.comprehension_group not in passage_cache:
+                passage_cache[q.comprehension_group] = q.get_shared_passage()
+            q._shared_passage = passage_cache[q.comprehension_group]
+        else:
+            q._shared_passage = None
+
     # Shuffle questions and answer options per-student when enabled (admins always see canonical order)
     if not is_admin:
         user_id = getattr(request.user, 'id', 0)
@@ -346,7 +356,7 @@ def get_exam_questions(request, exam_id: int):
             'latex_content': q.latex_content,
             'diagram_image': q.diagram_image.url if q.diagram_image else None,
             'equation_type': q.equation_type,
-            'comprehension_passage': q.comprehension_passage,
+            'comprehension_passage': getattr(q, '_shared_passage', None) or q.comprehension_passage,
             'comprehension_group': q.comprehension_group,
             'shared_image': {
                 'id': q.shared_image.id,
@@ -363,24 +373,7 @@ def get_exam_questions(request, exam_id: int):
 @router.post("/")
 def create_exam(request, exam_data: ExamCreateSchema):
     """Create a new exam (admin only)"""
-    from ninja.errors import HttpError
-    from rest_framework_simplejwt.authentication import JWTAuthentication
-    from rest_framework_simplejwt.exceptions import InvalidToken, AuthenticationFailed
-    
-    # Manual JWT authentication for Django Ninja
-    auth_header = request.headers.get('Authorization', '')
-    if not auth_header.startswith('Bearer '):
-        raise HttpError(401, "Authentication required")
-    
-    jwt_auth = JWTAuthentication()
-    try:
-        validated_token = jwt_auth.get_validated_token(auth_header.split(' ')[1])
-        user = jwt_auth.get_user(validated_token)
-        request.user = user
-    except (InvalidToken, AuthenticationFailed):
-        raise HttpError(401, "Authentication required")
-    
-    if not user.is_superuser:
+    if not request.user.is_superuser:
         raise HttpError(403, "Admin access required")
     
     try:
@@ -619,13 +612,8 @@ def bulk_create_questions(request, exam_id: int, questions_data: List[QuestionCr
 @admin_required_ninja
 def update_exam(request, exam_id: int, exam_data: ExamCreateSchema):
     """Update an existing exam (admin only)"""
-    print(f"DEBUG: PUT request received for exam {exam_id}")
-    print(f"DEBUG: Request data: {exam_data}")
-    print(f"DEBUG: Request user: {request.user}")
-    
     try:
         exam = get_object_or_404(Exam, id=exam_id)
-        print(f"DEBUG: Found exam: {exam.title}")
         
         # Update exam fields
         exam.title = exam_data.title
@@ -649,7 +637,6 @@ def update_exam(request, exam_id: int, exam_data: ExamCreateSchema):
             exam.status = _to_model_exam_status(exam_data.status)
         
         exam.save()
-        print(f"DEBUG: Exam saved successfully")
         
         return {
             "id": exam.id,
@@ -657,10 +644,6 @@ def update_exam(request, exam_id: int, exam_data: ExamCreateSchema):
             "message": "Exam updated successfully"
         }
     except Exception as e:
-        print(f"DEBUG: Exception occurred: {str(e)}")
-        print(f"DEBUG: Exception type: {type(e)}")
-        import traceback
-        print(f"DEBUG: Traceback: {traceback.format_exc()}")
         raise HttpError(400, f"Error updating exam: {str(e)}")
 
 
@@ -670,6 +653,11 @@ def update_exam_status(request, exam_id: int, payload: ExamStatusUpdateSchema):
     exam = get_object_or_404(Exam, id=exam_id)
 
     new_status = _to_model_exam_status(payload.status)
+    if new_status == 'draft':
+        from results.models import ExamAttempt as EA
+        in_progress = EA.objects.filter(exam=exam, status='in_progress').count()
+        if in_progress > 0:
+            raise HttpError(400, f"Cannot close exam: {in_progress} student(s) are still taking it.")
     if new_status not in ['draft', 'published']:
         raise HttpError(400, "Invalid status. Allowed: draft, active")
 
