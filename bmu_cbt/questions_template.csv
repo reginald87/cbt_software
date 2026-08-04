@@ -1,0 +1,4 @@
+exam_title,question_text,question_type,marks,answer_options,correct_answer,explanation
+Sample Exam,What is 2+2?,multiple,5,3|4|5|6,5,Basic addition problem
+Sample Exam,The sky is blue,true_false,2,,true,Basic observation
+Sample Exam,Explain gravity,short_answer,10,,,Physics concept explanation

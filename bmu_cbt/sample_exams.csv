@@ -1,0 +1,4 @@
+title,category_code,category_name,description,instructions,duration_minutes,passing_score,start_date,end_date,status,show_answers,show_score,shuffle_questions,shuffle_options,allow_review
+Anatomy Fundamentals,ANAT,Anatomy,Basic anatomy exam covering human body systems,Read all questions carefully before answering. Each question has only one correct answer.,60,70,2026-02-05 09:00:00,2026-02-05 11:00:00,active,true,true,false,false,true
+Biochemistry Basics,BIOC,Biochemistry,Fundamental biochemistry concepts,This exam covers basic biochemistry principles and metabolic pathways.,90,75,2026-02-06 10:00:00,2026-02-06 12:00:00,draft,true,true,true,false,true
+Physiology Introduction,PHYS,Physiology,Introduction to human physiology,Answer all questions to the best of your ability. Time management is important.,45,65,2026-02-07 14:00:00,2026-02-07 15:00:00,active,false,true,false,true,true

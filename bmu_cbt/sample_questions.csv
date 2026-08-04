@@ -1,0 +1,11 @@
+exam_title,question_text,question_type,marks,answer_options,correct_answer,explanation
+Anatomy Fundamentals,What is the largest organ in the human body?,multiple,5,Skin|Liver|Brain|Heart,Skin,The skin is the largest organ by surface area and weight.
+Anatomy Fundamentals,How many bones are in the adult human body?,multiple,3,206|208|210|212,206,The adult human skeleton typically contains 206 bones.
+Anatomy Fundamentals,The heart is a muscle.,true_false,2,,true,The heart is primarily composed of cardiac muscle tissue.
+Anatomy Fundamentals,What is the function of red blood cells?,short_answer,4,,,Red blood cells transport oxygen throughout the body using hemoglobin.
+Biochemistry Basics,What is the primary energy currency of the cell?,multiple,5,ATP|DNA|RNA|Glucose,ATP,ATP (adenosine triphosphate) is the main energy currency used by cells.
+Biochemistry Basics,Enzymes are proteins.,true_false,3,,true,Enzymes are biological catalysts that are typically protein-based.
+Biochemistry Basics,Explain the process of glycolysis.,short_answer,10,,,Glycolysis is the metabolic pathway that breaks down glucose into pyruvate, producing ATP and NADH in the process.
+Physiology Introduction,What is normal body temperature?,multiple,2,36.5°C|37°C|38°C|39°C,37°C,Normal human body temperature is approximately 37°C (98.6°F).
+Physiology Introduction,The nervous system controls heart rate.,true_false,3,,true,The autonomic nervous system regulates heart rate based on the body's needs.
+Physiology Introduction,Describe homeostasis.,short_answer,5,,,Homeostasis is the process by which biological systems maintain stability while adjusting to changing external conditions.

@@ -1,0 +1,164 @@
+/* Math and Science Question Styling */
+
+/* Math Question Styling */
+.math-question-content {
+  line-height: 1.6;
+}
+
+.math-inline {
+  display: inline-block;
+  margin: 0 0.2em;
+  font-family: 'Times New Roman', serif;
+}
+
+.math-block {
+  display: block;
+  margin: 1rem 0;
+  text-align: center;
+  font-family: 'Times New Roman', serif;
+}
+
+.math-equation {
+  display: block;
+  margin: 1.5rem 0;
+  padding: 1rem;
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  font-family: 'Times New Roman', serif;
+}
+
+/* Math Input Styling */
+.math-input-container {
+  position: relative;
+}
+
+.math-preview {
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: #fafbfc;
+  min-height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.math-preview-content {
+  font-family: 'Times New Roman', serif;
+  font-size: 16px;
+  color: #374151;
+}
+
+/* Chemistry Styling */
+.chem-input-container textarea {
+  font-family: 'Courier New', monospace;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.chem-formula {
+  font-family: 'Times New Roman', serif;
+  font-size: 1.1em;
+}
+
+.chem-element {
+  color: #1f2937;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.chem-subscript {
+  font-size: 0.8em;
+  vertical-align: sub;
+  color: #6b7280;
+}
+
+.chem-superscript {
+  font-size: 0.8em;
+  vertical-align: super;
+  color: #6b7280;
+}
+
+.chem-arrow {
+  color: #dc2626;
+  font-weight: bold;
+  margin: 0 0.2em;
+}
+
+.chem-equilibrium {
+  color: #059669;
+  font-weight: bold;
+  margin: 0 0.2em;
+}
+
+.chem-up {
+  color: #0284c7;
+  font-size: 1.2em;
+}
+
+.chem-down {
+  color: #dc2626;
+  font-size: 1.2em;
+}
+
+.chem-tools button {
+  transition: all 0.2s ease;
+}
+
+.chem-tools button:hover {
+  background-color: #e5e7eb;
+  transform: translateY(-1px);
+}
+
+/* Diagram Styling */
+.question-diagram {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* KaTeX Specific Styling */
+.katex-renderer {
+  font-size: 1.1em;
+}
+
+.katex-renderer.block {
+  text-align: center;
+  margin: 1em 0;
+}
+
+.katex-renderer .katex {
+  font-size: 1em;
+}
+
+.katex-renderer .katex-html {
+  color: #374151;
+}
+
+/* Error Handling */
+.math-error {
+  color: #dc2626;
+  background-color: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 4px;
+  padding: 0.5rem;
+}
+
+/* Responsive Design */
+@media (max-width: 640px) {
+  .math-preview {
+    min-height: 40px;
+    font-size: 14px;
+  }
+  
+  .chem-tools {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  
+  .chem-tools button {
+    font-size: 12px;
+    padding: 0.25rem 0.5rem;
+  }
+}

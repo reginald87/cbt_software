@@ -1,0 +1,2 @@
+title,category_code,category_name,description,instructions,duration_minutes,passing_score,start_date,end_date,status,show_answers,show_score,shuffle_questions,shuffle_options,allow_review
+Sample Exam,MATH,Mathematics,Basic mathematics exam,Read all questions carefully,60,70,2026-02-05 09:00:00,2026-02-05 11:00:00,active,true,true,false,false,true
