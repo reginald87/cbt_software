@@ -187,7 +187,9 @@ export default function TakeExam({ examId, attemptId, endTimeMs, onExit }: TakeE
   }
 
   const sortedQuestions = useMemo(() => {
-    return [...questions].sort((a, b) => a.order - b.order)
+    // Backend serves questions in the correct order (shuffled per-student when enabled).
+    // Do not re-sort by `order` here as it would undo the shuffle.
+    return [...questions]
   }, [questions])
 
   const activeQuestion = sortedQuestions[activeIndex] || null

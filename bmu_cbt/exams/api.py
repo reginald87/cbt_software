@@ -10,8 +10,17 @@ from utils.decorators import admin_required_ninja
 from bmu_cbt.ninja_auth import JWTAuth
 from datetime import datetime
 from django.utils import timezone
+import random
+import hashlib
 
 router = Router(auth=JWTAuth())
+
+
+def _shuffle_seed(*parts):
+    """Deterministic shuffle seed so the same student always gets the same order,
+    but different students get different orders."""
+    raw = '-'.join(str(p) for p in parts)
+    return int(hashlib.md5(raw.encode()).hexdigest()[:8], 16)
 
 
 def _to_model_exam_status(api_status: Optional[str]) -> Optional[str]:
@@ -305,9 +314,26 @@ def get_exam_admin_detail(request, exam_id: int):
 def get_exam_questions(request, exam_id: int):
     """Get all questions for an exam"""
     exam = get_object_or_404(Exam, id=exam_id)
-    questions = exam.questions.all().order_by('order').prefetch_related('answers', 'shared_image')
+    questions = list(exam.questions.all().order_by('order').prefetch_related('answers', 'shared_image'))
     is_admin = getattr(request.user, 'is_superuser', False)
-    
+
+    # Shuffle questions and answer options per-student when enabled (admins always see canonical order)
+    if not is_admin:
+        user_id = getattr(request.user, 'id', 0)
+
+        if exam.shuffle_questions:
+            rng = random.Random(_shuffle_seed(exam_id, user_id))
+            rng.shuffle(questions)
+
+        if exam.shuffle_options:
+            for q in questions:
+                q._shuffled_answers = list(q.answers.all())
+                rng = random.Random(_shuffle_seed(exam_id, user_id, q.id))
+                rng.shuffle(q._shuffled_answers)
+        else:
+            for q in questions:
+                q._shuffled_answers = None
+
     return [
         {
             'id': q.id,
@@ -328,7 +354,7 @@ def get_exam_questions(request, exam_id: int):
                 'image': q.shared_image.image.url if q.shared_image.image else None,
                 'caption': q.shared_image.caption
             } if q.shared_image else None,
-            'answers': list(q.answers.all().order_by('order').values('id', 'answer_text', 'order'))
+            'answers': [{'id': a.id, 'answer_text': a.answer_text, 'order': a.order} for a in (q._shuffled_answers or list(q.answers.all().order_by('order')))],
         }
         for q in questions
     ]
