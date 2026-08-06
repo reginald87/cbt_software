@@ -122,6 +122,9 @@ def login(request, payload: LoginSchema):
         "full_name": f"{user.first_name} {user.last_name}".strip(),
         "user_type": user.user_type,
         "profile_picture": profile_picture_url,
+        "is_superuser": user.is_superuser,
+        "is_staff": user.is_staff,
+        "must_change_password": bool(user.temporary_password or user.is_first_login),
     }
 
 
@@ -172,6 +175,7 @@ def get_profile(request):
         "profile_picture": profile_picture_url,
         "is_active": user.is_active,
         "date_joined": user.date_joined.isoformat(),
+        "must_change_password": bool(user.temporary_password or user.is_first_login),
     }
 
 
@@ -193,6 +197,7 @@ def change_password(request, payload: ChangePasswordSchema):
     
     user.set_password(payload.new_password)
     user.temporary_password = False
+    user.is_first_login = False
     user.save()
     
     # Invalidate all existing sessions

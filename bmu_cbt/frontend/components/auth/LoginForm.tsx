@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { Eye, EyeOff } from 'lucide-react'
 
@@ -9,6 +10,7 @@ export default function LoginForm() {
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const router = useRouter()
   
   const { login } = useAuth()
 
@@ -16,10 +18,18 @@ export default function LoginForm() {
     e.preventDefault()
     setIsLoading(true)
     
-    const success = await login(username.trim(), password)
+    const result = await login(username.trim(), password)
     
     // Always set loading to false after login attempt
     setIsLoading(false)
+
+    if (result.success) {
+      if (result.mustChangePassword) {
+        router.push('/change-password')
+      } else {
+        router.push('/dashboard')
+      }
+    }
   }
 
   return (

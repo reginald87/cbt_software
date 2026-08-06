@@ -7,7 +7,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 
 export default function TakeExamPage() {
-  const { isAuthenticated, isLoading } = useAuth()
+  const { isAuthenticated, isLoading, mustChangePassword } = useAuth()
   const searchParams = useSearchParams()
   const [examId, setExamId] = useState<number | null>(null)
   const [attemptId, setAttemptId] = useState<number | null>(null)
@@ -36,6 +36,12 @@ export default function TakeExamPage() {
   if (!isAuthenticated) {
     // Redirect to login if not authenticated
     window.location.href = '/'
+    return null
+  }
+
+  if (mustChangePassword) {
+    // Force first-login password change before allowing exam access
+    window.location.href = '/change-password'
     return null
   }
 

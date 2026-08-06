@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import api from '@/utils/axios'
 import { BookOpen, ChevronLeft, Clock, Flag, Loader2 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
+import toast from 'react-hot-toast'
 import TabSwitchDetector from './TabSwitchDetector'
 import ScreenRecorder from './ScreenRecorder'
 import WebcamMonitor from './WebcamMonitor'
@@ -116,7 +117,6 @@ export default function TakeExam({ examId, attemptId, endTimeMs, onExit }: TakeE
   const [savingQuestionId, setSavingQuestionId] = useState<number | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [navError, setNavError] = useState<string | null>(null)
 
   const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null)
   const endTimeMsRef = useRef<number | null>(null)
@@ -258,7 +258,6 @@ export default function TakeExam({ examId, attemptId, endTimeMs, onExit }: TakeE
 
   const goTo = (idx: number) => {
     if (idx < 0 || idx >= sortedQuestions.length) return
-    setNavError(null)
     setActiveIndex(idx)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
@@ -317,21 +316,6 @@ export default function TakeExam({ examId, attemptId, endTimeMs, onExit }: TakeE
 
   const currentSelected = selectedAnswers[activeQuestion.id] || null
   const currentBoolean = booleanAnswers[activeQuestion.id] !== null && booleanAnswers[activeQuestion.id] !== undefined ? booleanAnswers[activeQuestion.id] : null
-  const isCurrentAnswered = 
-    activeQuestion.question_type === 'multiple' ? !!currentSelected :
-    activeQuestion.question_type === 'true_false' ? currentBoolean !== null :
-    activeQuestion.question_type === 'fill_blank' ? !!(shortAnswers[activeQuestion.id] || '').trim() :
-    activeQuestion.question_type === 'short' ? !!(shortAnswers[activeQuestion.id] || '').trim() :
-    activeQuestion.question_type === 'math' ? !!(shortAnswers[activeQuestion.id] || '').trim() :
-    activeQuestion.question_type === 'chemistry' ? !!(shortAnswers[activeQuestion.id] || '').trim() :
-    activeQuestion.question_type === 'physics' ? !!(shortAnswers[activeQuestion.id] || '').trim() :
-    activeQuestion.question_type === 'comprehension' ? (
-      activeQuestion.answers && activeQuestion.answers.length > 0 ? !!currentSelected : !!(shortAnswers[activeQuestion.id] || '').trim()
-    ) :
-    activeQuestion.question_type === 'biology' ? (
-      activeQuestion.answers && activeQuestion.answers.length > 0 ? !!currentSelected : !!(shortAnswers[activeQuestion.id] || '').trim()
-    ) :
-    false
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white -m-6">
@@ -756,20 +740,9 @@ export default function TakeExam({ examId, attemptId, endTimeMs, onExit }: TakeE
                   >
                     Previous
                   </button>
-                  {navError ? (
-                    <div className="mx-3 text-sm text-red-600">{navError}</div>
-                  ) : (
-                    <div />
-                  )}
                   <button
                     className="inline-flex items-center rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-slate-800 disabled:opacity-50"
-                    onClick={() => {
-                      if (!isCurrentAnswered) {
-                        setNavError('Please answer this question before continuing')
-                        return
-                      }
-                      goTo(activeIndex + 1)
-                    }}
+                    onClick={() => goTo(activeIndex + 1)}
                     disabled={activeIndex === sortedQuestions.length - 1}
                   >
                     Next
@@ -793,21 +766,7 @@ export default function TakeExam({ examId, attemptId, endTimeMs, onExit }: TakeE
                     return (
                       <button
                         key={q.id}
-                        onClick={() => {
-                          // Allow navigating to any previous question
-                          if (idx < activeIndex) {
-                            goTo(idx)
-                            return
-                          }
-                          
-                          // For future questions, only allow if current question is answered
-                          if (isCurrentAnswered) {
-                            goTo(idx)
-                          } else {
-                            setNavError('Please answer the current question before jumping ahead')
-                            setTimeout(() => setNavError(''), 3000)
-                          }
-                        }}
+                        onClick={() => goTo(idx)}
                         className={`h-10 rounded-lg text-sm font-semibold border transition-colors ${
                           isActive
                             ? 'border-primary-600 bg-primary-50 text-primary-700'
@@ -846,6 +805,10 @@ export default function TakeExam({ examId, attemptId, endTimeMs, onExit }: TakeE
         attemptId={attemptId} 
         token={token}
         isActive={!isSubmitting && exam && sortedQuestions.length > 0}
+        onViolation={() => {
+          toast.error('Tab switching is prohibited. Your exam has been submitted.')
+          void submitExam(true)
+        }}
       />
       
       {/* Screen Recorder for Proctoring */}

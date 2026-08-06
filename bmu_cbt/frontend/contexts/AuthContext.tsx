@@ -25,10 +25,12 @@ interface User {
 interface AuthContextType {
   user: User | null
   token: string | null
-  login: (username: string, password: string) => Promise<boolean>
+  login: (username: string, password: string) => Promise<{ success: boolean; mustChangePassword: boolean }>
   logout: () => void
   isLoading: boolean
   isAuthenticated: boolean
+  mustChangePassword: boolean
+  clearMustChangePassword: () => void
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -45,6 +47,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null)
   const [token, setToken] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [mustChangePassword, setMustChangePassword] = useState(false)
 
   useEffect(() => {
     const savedToken = Cookies.get('access_token')
@@ -63,6 +66,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const response = await api.get('/auth/profile/')
       
       setUser(response.data)
+      setMustChangePassword(!!response.data.must_change_password)
       setIsLoading(false)
     } catch (error: any) {
       console.error('Token verification failed:', error)
@@ -84,7 +88,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }
 
-  const login = async (username: string, password: string): Promise<boolean> => {
+  const login = async (username: string, password: string): Promise<{ success: boolean; mustChangePassword: boolean }> => {
     setIsLoading(true)
     
     try {
@@ -111,16 +115,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         is_superuser: userData.is_superuser,
         is_staff: userData.is_staff,
       })
+
+      const changeRequired = !!userData.must_change_password
+      setMustChangePassword(changeRequired)
       
       toast.success('Login successful!')
       setIsLoading(false)
-      return true
+      return { success: true, mustChangePassword: changeRequired }
     } catch (error: any) {
       console.error('Login failed:', error)
       const errorMessage = error.response?.data?.detail || 'Login failed. Please try again.'
       toast.error(errorMessage)
       setIsLoading(false)
-      return false
+      return { success: false, mustChangePassword: false }
     }
   }
 
@@ -170,7 +177,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     Cookies.remove('refresh_token')
     setToken(null)
     setUser(null)
+    setMustChangePassword(false)
     toast.success('Logged out successfully')
+  }
+
+  const clearMustChangePassword = () => {
+    setMustChangePassword(false)
   }
 
   const value = {
@@ -180,6 +192,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     logout,
     isLoading,
     isAuthenticated: !!user,
+    mustChangePassword,
+    clearMustChangePassword,
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

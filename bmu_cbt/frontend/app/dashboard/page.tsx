@@ -5,7 +5,7 @@ import Dashboard from '@/components/dashboard/Dashboard'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 
 export default function DashboardPage() {
-  const { isAuthenticated, isLoading } = useAuth()
+  const { isAuthenticated, isLoading, mustChangePassword } = useAuth()
 
   if (isLoading) {
     return (
@@ -21,6 +21,12 @@ export default function DashboardPage() {
   if (!isAuthenticated) {
     // Redirect to login if not authenticated
     window.location.href = '/'
+    return null
+  }
+
+  if (mustChangePassword) {
+    // Force first-login password change before allowing dashboard access
+    window.location.href = '/change-password'
     return null
   }
 

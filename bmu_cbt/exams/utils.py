@@ -5,9 +5,19 @@ import csv
 import io
 from datetime import datetime
 from django.db import transaction
+from django.db.models import Count
 from django.utils.dateparse import parse_datetime
+from django.conf import settings
 from exams.models import Exam, ExamCategory, Question, Answer
 from users.models import User
+
+
+def _bulk_create_batches(model, objects, batch_size=None):
+    """Create objects in batches to avoid huge single INSERT statements."""
+    if batch_size is None:
+        batch_size = getattr(settings, 'BULK_CREATE_BATCH_SIZE', 500)
+    for start in range(0, len(objects), batch_size):
+        model.objects.bulk_create(objects[start:start + batch_size])
 
 
 def validate_exam_row(row, row_number):
@@ -70,58 +80,66 @@ def import_exams_from_csv(csv_file, user):
         
         imported_count = 0
         errors = []
+        categories = {}  # code -> ExamCategory (cached to avoid repeated lookups)
+        exams_to_create = []
         
-        with transaction.atomic():
-            for row_number, row in enumerate(rows, 1):
-                # Skip empty rows
-                if not any(row.values()):
-                    continue
-                
-                # Validate row
-                row_errors = validate_exam_row(row, row_number)
-                if row_errors:
-                    errors.extend(row_errors)
-                    continue
-                
-                try:
-                    # Get or create category
-                    category_code = row['category_code'].strip()
-                    category, created = ExamCategory.objects.get_or_create(
+        for row_number, row in enumerate(rows, 1):
+            # Skip empty rows
+            if not any(row.values()):
+                continue
+            
+            # Validate row
+            row_errors = validate_exam_row(row, row_number)
+            if row_errors:
+                errors.extend(row_errors)
+                continue
+            
+            try:
+                # Get or create category (cached per unique code)
+                category_code = row['category_code'].strip()
+                category = categories.get(category_code)
+                if category is None:
+                    category, _ = ExamCategory.objects.get_or_create(
                         code=category_code,
                         defaults={
                             'name': row.get('category_name', category_code.title()),
                             'description': row.get('category_description', '')
                         }
                     )
-                    
-                    # Parse dates
-                    start_date = parse_datetime(row.get('start_date', ''))
-                    end_date = parse_datetime(row.get('end_date', ''))
-                    
-                    # Create exam
-                    exam = Exam.objects.create(
-                        title=row['title'].strip(),
-                        category=category,
-                        description=row.get('description', '').strip(),
-                        instructions=row.get('instructions', '').strip(),
-                        duration_minutes=int(row['duration_minutes']),
-                        passing_score=int(row['passing_score']),
-                        start_date=start_date,
-                        end_date=end_date,
-                        status='draft',
-                        show_answers=row.get('show_answers', 'true').lower() == 'true',
-                        show_score=row.get('show_score', 'true').lower() == 'true',
-                        shuffle_questions=row.get('shuffle_questions', 'false').lower() == 'true',
-                        shuffle_options=row.get('shuffle_options', 'false').lower() == 'true',
-                        allow_review=row.get('allow_review', 'true').lower() == 'true',
-                        created_by=user,
-                        total_questions=0  # Will be updated when questions are added
-                    )
-                    
-                    imported_count += 1
-                    
-                except Exception as e:
-                    errors.append(f"Row {row_number}: {str(e)}")
+                    categories[category_code] = category
+                
+                # Parse dates
+                start_date = parse_datetime(row.get('start_date', ''))
+                end_date = parse_datetime(row.get('end_date', ''))
+                
+                # Create exam (saved in bulk at the end)
+                exam = Exam(
+                    title=row['title'].strip(),
+                    category=category,
+                    description=row.get('description', '').strip(),
+                    instructions=row.get('instructions', '').strip(),
+                    duration_minutes=int(row['duration_minutes']),
+                    passing_score=int(row['passing_score']),
+                    start_date=start_date,
+                    end_date=end_date,
+                    status='draft',
+                    show_answers=row.get('show_answers', 'true').lower() == 'true',
+                    show_score=row.get('show_score', 'true').lower() == 'true',
+                    shuffle_questions=row.get('shuffle_questions', 'false').lower() == 'true',
+                    shuffle_options=row.get('shuffle_options', 'false').lower() == 'true',
+                    allow_review=row.get('allow_review', 'true').lower() == 'true',
+                    created_by=user,
+                    total_questions=0  # Will be updated when questions are added
+                )
+                
+                exams_to_create.append(exam)
+                imported_count += 1
+                
+            except Exception as e:
+                errors.append(f"Row {row_number}: {str(e)}")
+        
+        with transaction.atomic():
+            _bulk_create_batches(Exam, exams_to_create)
         
         return {
             'success': len(errors) == 0,
@@ -217,81 +235,110 @@ def import_questions_from_csv(csv_file, user):
         imported_count = 0
         errors = []
         
-        with transaction.atomic():
-            for row_number, row in enumerate(rows, 1):
-                # Skip empty rows
-                if not any(row.values()):
-                    continue
-                
-                # Validate row
-                row_errors = validate_questions_row(row, row_number)
-                if row_errors:
-                    errors.extend(row_errors)
-                    continue
-                
-                try:
-                    # Get exam
-                    exam = None
-                    exam_id_value = (row.get('exam_id') or '').strip()
-                    if exam_id_value:
+        # Caches to avoid repeated DB lookups/counts for rows referencing the
+        # same exam.
+        exam_cache = {}          # key ('id', value) / ('title', value) -> Exam
+        next_orders = {}         # exam_id -> next order number
+        questions_to_create = [] # in-memory Question objects (bulk-created)
+        answers_to_create = []   # in-memory Answer objects (bulk-created)
+        
+        for row_number, row in enumerate(rows, 1):
+            # Skip empty rows
+            if not any(row.values()):
+                continue
+            
+            # Validate row
+            row_errors = validate_questions_row(row, row_number)
+            if row_errors:
+                errors.extend(row_errors)
+                continue
+            
+            try:
+                # Get exam (cached)
+                exam = None
+                exam_id_value = (row.get('exam_id') or '').strip()
+                if exam_id_value:
+                    cache_key = ('id', exam_id_value)
+                    exam = exam_cache.get(cache_key)
+                    if exam is None:
                         exam = Exam.objects.filter(id=exam_id_value).first()
+                        if exam is not None:
+                            exam_cache[cache_key] = exam
 
+                if exam is None:
+                    exam_title = row['exam_title'].strip()
+                    cache_key = ('title', exam_title)
+                    exam = exam_cache.get(cache_key)
                     if exam is None:
-                        exam_title = row['exam_title'].strip()
                         exam = Exam.objects.filter(title=exam_title).order_by('-id').first()
+                        if exam is not None:
+                            exam_cache[cache_key] = exam
 
-                    if exam is None:
-                        raise Exam.DoesNotExist("Exam not found")
+                if exam is None:
+                    raise Exam.DoesNotExist("Exam not found")
+                
+                question_type = row['question_type'].strip().lower()
+                
+                # Assign order using an in-memory counter (one initial COUNT per
+                # exam instead of a COUNT query for every row).
+                if exam.id not in next_orders:
+                    next_orders[exam.id] = Question.objects.filter(exam=exam).count() + 1
+                order = next_orders[exam.id]
+                next_orders[exam.id] += 1
+                
+                # Create question (bulk-created at the end)
+                question = Question(
+                    exam=exam,
+                    question_text=row['question_text'].strip(),
+                    question_type=question_type,
+                    marks=int(row['marks']),
+                    explanation=row.get('explanation', '').strip(),
+                    order=order
+                )
+                questions_to_create.append(question)
+                
+                # Create answers for multiple choice questions
+                if question_type == 'multiple':
+                    answer_options_str = row.get('answer_options', '')
+                    answer_options = [opt.strip() for opt in answer_options_str.split('|') if opt.strip()] if answer_options_str else []
+                    correct_answer = row.get('correct_answer', '').strip()
                     
-                    question_type = row['question_type'].strip().lower()
-                    
-                    # Create question
-                    question = Question.objects.create(
-                        exam=exam,
-                        question_text=row['question_text'].strip(),
-                        question_type=question_type,
-                        marks=int(row['marks']),
-                        explanation=row.get('explanation', '').strip(),
-                        order=Question.objects.filter(exam=exam).count() + 1
-                    )
-                    
-                    # Create answers for multiple choice questions
-                    if question_type == 'multiple':
-                        answer_options_str = row.get('answer_options', '')
-                        answer_options = [opt.strip() for opt in answer_options_str.split('|') if opt.strip()] if answer_options_str else []
-                        correct_answer = row.get('correct_answer', '').strip()
-                        
-                        for i, option_text in enumerate(answer_options):
-                            Answer.objects.create(
-                                question=question,
-                                answer_text=option_text,
-                                is_correct=(option_text == correct_answer),
-                                order=i + 1
-                            )
+                    for i, option_text in enumerate(answer_options):
+                        answers_to_create.append(Answer(
+                            question=question,
+                            answer_text=option_text,
+                            is_correct=(option_text == correct_answer),
+                            order=i + 1
+                        ))
 
-                    if question_type == 'true_false':
-                        correct_answer = row.get('correct_answer', '').strip().lower()
-                        Answer.objects.create(
-                            question=question,
-                            answer_text='True',
-                            is_correct=(correct_answer == 'true'),
-                            order=1,
-                        )
-                        Answer.objects.create(
-                            question=question,
-                            answer_text='False',
-                            is_correct=(correct_answer == 'false'),
-                            order=2,
-                        )
-                    
-                    imported_count += 1
-                    
-                    # Update exam total questions
-                    exam.total_questions = Question.objects.filter(exam=exam).count()
-                    exam.save()
-                    
-                except Exception as e:
-                    errors.append(f"Row {row_number}: {str(e)}")
+                if question_type == 'true_false':
+                    correct_answer = row.get('correct_answer', '').strip().lower()
+                    answers_to_create.append(Answer(
+                        question=question,
+                        answer_text='True',
+                        is_correct=(correct_answer == 'true'),
+                        order=1,
+                    ))
+                    answers_to_create.append(Answer(
+                        question=question,
+                        answer_text='False',
+                        is_correct=(correct_answer == 'false'),
+                        order=2,
+                    ))
+                
+                imported_count += 1
+                
+            except Exception as e:
+                errors.append(f"Row {row_number}: {str(e)}")
+        
+        with transaction.atomic():
+            # Bulk create questions first so they receive IDs, then answers.
+            _bulk_create_batches(Question, questions_to_create)
+            _bulk_create_batches(Answer, answers_to_create)
+            
+            # Update exam question counts once per exam
+            for exam_id, next_order in next_orders.items():
+                Exam.objects.filter(id=exam_id).update(total_questions=next_order - 1)
         
         return {
             'success': len(errors) == 0,

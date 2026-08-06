@@ -128,6 +128,35 @@ def get_active_user_sessions(request):
 
 # ==================== Bulk Student Upload ====================
 
+def _generate_bulk_usernames(count, existing_usernames):
+    """Generate `count` unique BMU-XXXX usernames without per-user DB queries.
+
+    Collisions are resolved in memory against the provided set of existing
+    usernames. If the configured numeric space is exhausted, the suffix length
+    is increased automatically.
+    """
+    from django.utils.crypto import get_random_string
+    from django.conf import settings
+
+    prefix = settings.BMU_CONFIG.get('USERNAME_PREFIX', 'BMU-')
+    length = settings.BMU_CONFIG.get('USERNAME_LENGTH', 4)
+
+    used = set(existing_usernames)
+    usernames = []
+
+    while len(usernames) < count:
+        # Expand the suffix length if the current space is running out
+        if len(used) >= 10 ** length:
+            length += 1
+        numbers = get_random_string(length=length, allowed_chars='0123456789')
+        username = f"{prefix}{numbers}"
+        if username in used:
+            continue
+        used.add(username)
+        usernames.append(username)
+
+    return usernames
+
 @router.get("/bulk-upload/template/")
 def download_bulk_upload_template(request):
     """Download CSV template for bulk student upload"""
@@ -173,17 +202,38 @@ def download_bulk_upload_template(request):
 @router.post("/bulk-upload/data/")
 def process_bulk_student_data(request, students_data: List[BulkStudentUploadSchema]):
     """Process bulk student data and create accounts"""
+    from django.db import transaction
+    from django.contrib.auth.hashers import make_password
+    from django.contrib.auth.models import Group
+    from django.conf import settings
+
     if not request.user.is_superuser:
         raise HttpError(403, "Admin access required")
-    
-    successful = []
-    failed = []
-    errors = []
+
+    # Existing identifiers/usernames used to detect duplicates up front so a
+    # single bad row can't abort a bulk_create batch.
+    existing_usernames = set(User.objects.values_list('username', flat=True))
+    existing_matric = set(User.objects.exclude(matric_number__isnull=True).exclude(matric_number='')
+                          .values_list('matric_number', flat=True))
+    existing_jamb = set(User.objects.exclude(jamb_number__isnull=True).exclude(jamb_number='')
+                        .values_list('jamb_number', flat=True))
+
+    usernames = _generate_bulk_usernames(len(students_data), existing_usernames)
+
+    user_type_by_group = {
+        'matriculated': 'matriculated_students',
+        '100level': '100level_students',
+        'intending': 'intending_students',
+    }
+
+    users_to_create = []
+    group_users = {}
     credentials = []
-    
+    errors = []
+    failed_rows = []
+
     for i, student_data in enumerate(students_data, 1):
         try:
-            # Create user
             user = User(
                 first_name=student_data.first_name,
                 last_name=student_data.last_name,
@@ -192,27 +242,43 @@ def process_bulk_student_data(request, students_data: List[BulkStudentUploadSche
                 matric_number=student_data.matric_number,
                 jamb_number=student_data.jamb_number,
                 department=student_data.department,
-                course=student_data.course,
+                course=student_data.course or '',
                 year_of_entry=student_data.year_of_entry,
                 is_first_login=True,
                 temporary_password=True,
                 is_staff=False,
                 is_superuser=False
             )
-            
-            # Auto-generate username and password
-            username = user.generate_username()
+
+            # Uniqueness checks (format validation happens in full_clean below)
+            if user.matric_number and user.matric_number in existing_matric:
+                raise ValidationError("Matric number already exists")
+            if user.jamb_number and user.jamb_number in existing_jamb:
+                raise ValidationError("JAMB number already exists")
+
+            username = usernames[i - 1]
             password = user.generate_password()
-            
+
             user.username = username
-            user.set_password(password)
-            user.temporary_plain_password = password  # Store plain text for export
-            
-            # Validate and save
+            # Store temporary plain password for credential export and use the
+            # faster temporary hasher so large batches import quickly. Students
+            # are forced to change their password on first login.
+            user.temporary_plain_password = password
+            user.password = make_password(password, hasher='pbkdf2_sha256_temp')
+
             user.full_clean()
-            user.save()
-            
-            successful.append(user)
+
+            users_to_create.append(user)
+            existing_usernames.add(username)
+            if user.matric_number:
+                existing_matric.add(user.matric_number)
+            if user.jamb_number:
+                existing_jamb.add(user.jamb_number)
+
+            group_name = user_type_by_group.get(user.user_type)
+            if group_name:
+                group_users.setdefault(group_name, []).append(user)
+
             credentials.append({
                 'first_name': user.first_name,
                 'last_name': user.last_name,
@@ -223,20 +289,31 @@ def process_bulk_student_data(request, students_data: List[BulkStudentUploadSche
                 'jamb_number': user.jamb_number,
                 'department': user.department
             })
-            
         except ValidationError as e:
-            error_msg = f"Row {i}: Validation error - {str(e)}"
-            errors.append(error_msg)
-            failed.append(i)
+            errors.append(f"Row {i}: Validation error - {str(e)}")
+            failed_rows.append(i)
         except Exception as e:
-            error_msg = f"Row {i}: {str(e)}"
-            errors.append(error_msg)
-            failed.append(i)
-    
+            errors.append(f"Row {i}: {str(e)}")
+            failed_rows.append(i)
+
+    # Bulk insert all valid users (skips per-row save() and post_save signals)
+    batch_size = getattr(settings, 'BULK_CREATE_BATCH_SIZE', 500)
+    with transaction.atomic():
+        for start in range(0, len(users_to_create), batch_size):
+            User.objects.bulk_create(users_to_create[start:start + batch_size])
+
+    # Replicate the post_save group assignment (bulk_create bypasses signals)
+    for group_name, members in group_users.items():
+        try:
+            group = Group.objects.get(name=group_name)
+            group.user_set.add(*members)
+        except Group.DoesNotExist:
+            pass
+
     return {
         'total_rows': len(students_data),
-        'successful': len(successful),
-        'failed': len(failed),
+        'successful': len(users_to_create),
+        'failed': len(failed_rows),
         'errors': errors,
         'credentials': credentials
     }

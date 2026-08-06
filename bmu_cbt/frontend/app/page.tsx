@@ -6,13 +6,13 @@ import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import { useEffect } from 'react'
 
 export default function Home() {
-  const { isAuthenticated, isLoading } = useAuth()
+  const { isAuthenticated, isLoading, mustChangePassword } = useAuth()
 
   useEffect(() => {
     if (!isLoading && isAuthenticated) {
-      window.location.href = '/dashboard'
+      window.location.href = mustChangePassword ? '/change-password' : '/dashboard'
     }
-  }, [isAuthenticated, isLoading])
+  }, [isAuthenticated, isLoading, mustChangePassword])
 
   if (isLoading) {
     return (
