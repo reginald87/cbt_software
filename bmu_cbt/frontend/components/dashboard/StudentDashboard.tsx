@@ -547,7 +547,7 @@ export default function StudentDashboard() {
                     </li>
                     <li className="flex items-start gap-2">
                       <span className="text-red-600 mt-1">•</span>
-                      <span><strong>Tab switching</strong> will be detected and logged</span>
+                      <span><strong>Tab switching</strong> will automatically submit your exam and end your attempt immediately</span>
                     </li>
                     <li className="flex items-start gap-2">
                       <span className="text-red-600 mt-1">•</span>

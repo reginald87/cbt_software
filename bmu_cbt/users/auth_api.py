@@ -198,6 +198,7 @@ def change_password(request, payload: ChangePasswordSchema):
     user.set_password(payload.new_password)
     user.temporary_password = False
     user.is_first_login = False
+    user.temporary_plain_password = None
     user.save()
     
     # Invalidate all existing sessions
