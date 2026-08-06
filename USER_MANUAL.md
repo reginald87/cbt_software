@@ -26,7 +26,7 @@ The BMU CBT System is a web-based examination platform that allows administrator
 - **Question Shuffling** — Randomised question and answer order per student
 - **Multiple Question Types** — Multiple Choice, True/False, Fill-in-the-Blank, Short Answer, Math, Chemistry, Physics, Biology, Comprehension
 - **Auto-Grading** — MCQ, True/False, and Fill-in-the-Blank are graded automatically
-- **Security Monitoring** — Tab-switch detection, IP lock, session tracking
+- **Security Monitoring** — Auto-submits the exam on the first tab switch, IP lock, session tracking
 - **CSV Import/Export** — Bulk student and question upload via CSV files
 - **Live Monitoring** — Admins can watch active exam sessions in real time
 
@@ -64,7 +64,38 @@ The BMU CBT System is a web-based examination platform that allows administrator
 4. Students can now access the system at: `http://<server-IP>:3000`
 5. The IP address will be displayed in the startup window
 
-### 2.3 Accessing the Admin Panel
+### 2.3 Updating the System (After a Git Pull)
+
+Whenever new code is pushed to GitHub, the server laptop must be updated before students can use the new features:
+
+1. Open a terminal in the repo folder and pull the latest code:
+   ```
+   git pull
+   ```
+2. Install the latest backend dependencies:
+   ```
+   bmu_cbt\venv\Scripts\python.exe -m pip install -r bmu_cbt\requirements_new.txt
+   ```
+   This upgrades packages such as `django-jazzmin` (fixes the admin panel pagination error with many users).
+3. Apply any database migrations:
+   ```
+   bmu_cbt\venv\Scripts\python.exe bmu_cbt\manage.py migrate
+   ```
+4. Rebuild the frontend so the new code is compiled into the production build:
+   - Run **`setup_lan.bat`** (installs frontend dependencies and builds), **or** run manually:
+     ```
+     cd bmu_cbt\frontend
+     npm install
+     npm run build
+     ```
+5. Start the system with **`start_lan.bat`** — it auto-detects the server's IP, updates `.env`, and launches both servers.
+
+**Important**
+- Always use the production server on the exam laptop: `npm run build` followed by `npm run start`. **Do not use `npm run dev`** — it is only for development and is not suited to serving students.
+- Ensure Windows Firewall allows inbound connections on ports **3000** (frontend) and **8000** (backend), otherwise students cannot reach the system.
+- The frontend detects the API address automatically from the browser address bar, so no URL configuration is needed after changing the laptop's IP — only `.env` (updated automatically by `start_lan.bat`) and the firewall rules matter.
+
+### 2.4 Accessing the Admin Panel
 
 - **URL:** `http://<server-IP>:8000/admin/`
 - Login with the admin superuser credentials
@@ -304,8 +335,8 @@ After login, you'll see the **Student Dashboard** showing:
 
 | Rule | What Happens |
 |------|-------------|
-| **Switching tabs** | Warning — repeated switches may block your exam |
-| **Opening new windows** | Warning logged |
+| **Switching tabs** | The exam is submitted immediately and your attempt ends |
+| **Opening new windows** | The exam is submitted immediately and your attempt ends |
 | **IP address change** | Session may be invalidated |
 | **Browser close** | Resume from where you left off (if within time limit) |
 | **Internet disconnection** | Reconnect and resume — answers are saved server-side |
