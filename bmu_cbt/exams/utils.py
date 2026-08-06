@@ -157,6 +157,58 @@ def import_exams_from_csv(csv_file, user):
         }
 
 
+VALID_QUESTION_TYPES = [
+    'multiple', 'true_false', 'fill_blank', 'short',
+    'math', 'chemistry', 'physics', 'biology', 'comprehension',
+]
+
+# Backwards-compatible alias -> canonical question_type
+QUESTION_TYPE_ALIASES = {
+    'short_answer': 'short',
+}
+
+VALID_EQUATION_TYPES = ['algebraic', 'chemical', 'physics', 'statistical']
+
+ALLOWED_IMAGE_EXTENSIONS = ('.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg')
+
+
+def _normalize_question_type(raw_type):
+    """Return the canonical question_type for a raw CSV value (or None)."""
+    qtype = (raw_type or '').strip().lower()
+    if qtype in QUESTION_TYPE_ALIASES:
+        return QUESTION_TYPE_ALIASES[qtype]
+    return qtype if qtype in VALID_QUESTION_TYPES else None
+
+
+def _diagram_filename(value):
+    """Resolve the diagram_image column to a safe filename.
+
+    Returns the basename if the file exists in media/question_diagrams/,
+    otherwise returns None (caller reports the error).
+    """
+    raw = (value or '').strip()
+    if not raw:
+        return None
+
+    # Only accept a plain filename, never a path (no traversal)
+    import os
+    from django.conf import settings
+
+    filename = os.path.basename(raw.replace('\\', '/'))
+    if not filename or filename != raw.replace('\\', '/'):
+        return None
+
+    ext = os.path.splitext(filename)[1].lower()
+    if ext not in ALLOWED_IMAGE_EXTENSIONS:
+        return None
+
+    full_path = os.path.join(settings.MEDIA_ROOT, 'question_diagrams', filename)
+    if not os.path.isfile(full_path):
+        return None
+
+    return filename
+
+
 def validate_questions_row(row, row_number):
     """Validate a single row from questions CSV"""
     errors = []
@@ -168,9 +220,9 @@ def validate_questions_row(row, row_number):
             errors.append(f"Row {row_number}: {field} is required")
     
     # Validate question type
-    question_type = row.get('question_type', '').strip().lower()
-    if question_type not in ['multiple', 'true_false', 'short_answer']:
-        errors.append(f"Row {row_number}: Question type must be 'multiple', 'true_false', or 'short_answer'")
+    question_type = _normalize_question_type(row.get('question_type', ''))
+    if question_type is None:
+        errors.append(f"Row {row_number}: Question type must be one of: {', '.join(VALID_QUESTION_TYPES)}")
     
     # Validate marks
     try:
@@ -206,8 +258,26 @@ def validate_questions_row(row, row_number):
         elif correct_answer.lower() not in ['true', 'false']:
             errors.append(f"Row {row_number}: correct_answer must be 'true' or 'false' for true/false questions")
 
-    # For short answers, correct_answer may be empty (manual marking or rubric-based)
-    
+    # Fill in the blank needs the exact correct answer for auto-grading
+    if question_type == 'fill_blank' and not correct_answer:
+        errors.append(f"Row {row_number}: correct_answer is required for fill_blank questions")
+
+    # Validate diagram_image (must be a plain filename present in media/question_diagrams/)
+    diagram_value = (row.get('diagram_image') or '').strip()
+    if diagram_value:
+        filename = _diagram_filename(diagram_value)
+        if filename is None:
+            errors.append(
+                f"Row {row_number}: diagram_image must be an image filename "
+                f"({', '.join(ALLOWED_IMAGE_EXTENSIONS)}) placed in the media/question_diagrams/ folder "
+                f"on the server (e.g. 'photosynthesis.png')"
+            )
+
+    # Validate equation_type if provided
+    equation_type = (row.get('equation_type') or '').strip().lower()
+    if equation_type and equation_type not in VALID_EQUATION_TYPES:
+        errors.append(f"Row {row_number}: equation_type must be one of: {', '.join(VALID_EQUATION_TYPES)}")
+
     return errors
 
 
@@ -215,7 +285,10 @@ def import_questions_from_csv(csv_file, user):
     """
     Import questions from CSV file
     Expected CSV format:
-    exam_id (optional),exam_title,question_text,question_type,marks,answer_options,correct_answer,explanation
+    exam_id (optional),exam_title,question_text,question_type,marks,answer_options,correct_answer,latex_content,diagram_image,equation_type,explanation
+
+    diagram_image: plain filename (e.g. photosynthesis.png) of a file that must
+    already exist on the server in media/question_diagrams/.
     """
     try:
         # Decode file if it's bytes
@@ -277,7 +350,7 @@ def import_questions_from_csv(csv_file, user):
                 if exam is None:
                     raise Exam.DoesNotExist("Exam not found")
                 
-                question_type = row['question_type'].strip().lower()
+                question_type = _normalize_question_type(row.get('question_type', ''))
                 
                 # Assign order using an in-memory counter (one initial COUNT per
                 # exam instead of a COUNT query for every row).
@@ -295,6 +368,29 @@ def import_questions_from_csv(csv_file, user):
                     explanation=row.get('explanation', '').strip(),
                     order=order
                 )
+
+                # Optional math/science fields
+                latex_content = (row.get('latex_content') or '').strip()
+                if latex_content:
+                    question.latex_content = latex_content
+
+                equation_type = (row.get('equation_type') or '').strip().lower()
+                if equation_type:
+                    question.equation_type = equation_type
+
+                # Optional diagram image (validated in validate_questions_row).
+                # The file is already on disk in media/question_diagrams/, so we
+                # only store its name — Django will resolve the URL for it.
+                diagram_value = (row.get('diagram_image') or '').strip()
+                if diagram_value:
+                    diagram_filename = _diagram_filename(diagram_value)
+                    if diagram_filename:
+                        question.diagram_image.name = f"question_diagrams/{diagram_filename}"
+
+                # Fill in the blank stores the exact answer for auto-grading
+                if question_type == 'fill_blank':
+                    question.correct_answer = (row.get('correct_answer') or '').strip()
+
                 questions_to_create.append(question)
                 
                 # Create answers for multiple choice questions
@@ -373,10 +469,12 @@ def generate_exam_template():
 def generate_questions_template():
     """Generate CSV template for questions import"""
     template = [
-        ['exam_title', 'question_text', 'question_type', 'marks', 'answer_options', 'correct_answer', 'explanation'],
-        ['Sample Exam', 'What is 2+2?', 'multiple', '5', '3|4|5|6', '5', 'Basic addition problem'],
-        ['Sample Exam', 'The sky is blue', 'true_false', '2', '', 'true', 'Basic observation'],
-        ['Sample Exam', 'Explain gravity', 'short_answer', '10', '', '', 'Physics concept explanation']
+        ['exam_id', 'exam_title', 'question_text', 'question_type', 'marks', 'answer_options', 'correct_answer', 'latex_content', 'diagram_image', 'equation_type', 'explanation'],
+        ['', 'Sample Exam', 'What is 2+2?', 'multiple', '5', '3|4|5|6', '5', '', '', '', 'Basic addition problem'],
+        ['', 'Sample Exam', 'The sky is blue', 'true_false', '2', '', 'true', '', '', '', 'Basic observation'],
+        ['', 'Sample Exam', 'The chemical symbol for water is ____', 'fill_blank', '2', '', 'H2O', '', '', '', 'Chemistry basics'],
+        ['', 'Sample Exam', 'Explain gravity', 'short', '10', '', '', '', '', '', 'Physics concept explanation'],
+        ['', 'Sample Exam', 'Identify the plant cell organelle', 'physics', '5', 'Mitochondria|Chloroplast|Nucleus', 'Chloroplast', '', 'plant_cell.png', 'physics', 'Diagram-based question'],
     ]
     
     return template

@@ -159,13 +159,24 @@ Whenever new code is pushed to GitHub, the server laptop must be updated before 
 
 | Column | Description | Example |
 |--------|-------------|---------|
+| `exam_id` | Exam ID (optional, or use `exam_title`) | `3` |
+| `exam_title` | Title of the exam the question belongs to | `BIO101 - General Biology` |
 | `question_text` | The question | "What is the powerhouse of the cell?" |
-| `question_type` | Type of question | `multiple`, `true_false`, `fill_blank`, `short` |
+| `question_type` | Type of question | `multiple`, `true_false`, `fill_blank`, `short`, `math`, `chemistry`, `physics`, `biology`, `comprehension` |
 | `marks` | Points | `1` |
-| `correct_answer` | Correct answer (for fill_blank) | `Mitochondria` |
-| `option_1` through `option_6` | Answer choices | `"Nucleus"`, `"Mitochondria"`, `"Ribosome"` |
-| `correct_option` | Which option is correct (1-based) | `2` |
+| `answer_options` | Answer choices separated by `\|` (for multiple) | `Nucleus\|Mitochondria\|Ribosome` |
+| `correct_answer` | Correct answer (for fill_blank, exact text) | `Mitochondria` |
+| `latex_content` | LaTeX equation (for math/chemistry) | `$x^2 + 5x + 6 = 0$` |
+| `diagram_image` | Image filename (must be in the server's `media/question_diagrams/` folder) | `plant_cell.png` |
+| `equation_type` | Equation type for math/science | `algebraic`, `chemical`, `physics`, `statistical` |
 | `explanation` | Explanation (optional) | "Mitochondria generates ATP" |
+
+**Using Images in Bulk Import**
+
+1. Copy the image file (jpg, jpeg, png, gif, webp, bmp, or svg) into the **`media/question_diagrams/`** folder on the server laptop.
+2. In the CSV, enter only the **filename** (e.g., `plant_cell.png`) in the `diagram_image` column — not a full path.
+3. The image is then shown automatically on the student's exam screen for that question.
+4. If the filename is missing from the folder or has an invalid extension, that row is rejected with an error message naming the problem.
 
 #### Question Types
 

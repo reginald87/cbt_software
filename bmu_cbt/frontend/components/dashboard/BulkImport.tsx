@@ -80,10 +80,10 @@ export default function BulkImport() {
     const template = activeTab === 'exams'
       ? `exam_title,category_code,description,duration_minutes,total_questions,passing_score,difficulty_level,start_date,end_date,status\n` +
         `Sample Exam,MATH101,Sample math exam,60,50,70,medium,2024-01-01 09:00,2024-01-31 23:59,draft`
-      : `exam_id,question_text,question_type,marks,order,correct_answer,latex_content,diagram_image,equation_type,explanation\n` +
-        `1,Solve for x: $x^2 + 5x + 6 = 0$,math,5,1,x = -2, x = -3,x^2 + 5x + 6 = 0,,algebraic,Factor the quadratic equation\n` +
-        `1,Balance: H2 + O2 → H2O,chemistry,5,2,2H2 + O2 → 2H2O,,,chemical,Balance the chemical equation\n` +
-        `1,Calculate force: F = ma,physics,5,3,F = ma,,physics_diagram.jpg,physics,Newton's second law`
+      : `exam_id,exam_title,question_text,question_type,marks,order,correct_answer,latex_content,diagram_image,equation_type,explanation\n` +
+        `1,Sample Exam,Solve for x: $x^2 + 5x + 6 = 0$,math,5,1,x = -2, x = -3,x^2 + 5x + 6 = 0,,algebraic,Factor the quadratic equation\n` +
+        `1,Sample Exam,Balance: H2 + O2 → H2O,chemistry,5,2,2H2 + O2 → 2H2O,,,chemical,Balance the chemical equation\n` +
+        `1,Sample Exam,Calculate force: F = ma,physics,5,3,F = ma,,physics_diagram.png,physics,Newton's second law`
 
     const blob = new Blob([template], { type: 'text/csv' })
     const url = window.URL.createObjectURL(blob)
@@ -158,7 +158,8 @@ export default function BulkImport() {
                   <>
                     <li>• For math questions: Use LaTeX format (e.g., $x^2 + 5x + 6 = 0$)</li>
                     <li>• For chemistry: Use chemical notation (e.g., 2H2 + O2 → 2H2O)</li>
-                    <li>• For physics: Include diagram image filename if needed</li>
+                    <li>• For images: save the image file (jpg, png, webp, etc.) in the server's <strong>media/question_diagrams/</strong> folder, then put just the filename (e.g. <code>plant_cell.png</code>) in the <code>diagram_image</code> column</li>
+                    <li>• Supported question types: multiple, true_false, fill_blank, short, math, chemistry, physics, biology, comprehension</li>
                   </>
                 )}
               </ul>
