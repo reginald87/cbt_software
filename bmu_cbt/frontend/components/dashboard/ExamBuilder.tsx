@@ -85,6 +85,10 @@ export default function ExamBuilder({ examId }: ExamBuilderProps) {
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [activeTab, setActiveTab] = useState<'details' | 'questions'>('details')
+  const [showCategoryForm, setShowCategoryForm] = useState(false)
+  const [newCategoryName, setNewCategoryName] = useState('')
+  const [newCategoryCode, setNewCategoryCode] = useState('')
+  const [creatingCategory, setCreatingCategory] = useState(false)
 
   useEffect(() => {
     fetchCategories()
@@ -109,12 +113,49 @@ export default function ExamBuilder({ examId }: ExamBuilderProps) {
     }
   }
 
+  const createCategory = async () => {
+    if (!newCategoryName.trim()) {
+      toast.error('Category name is required')
+      return
+    }
+    if (!newCategoryCode.trim()) {
+      toast.error('Category code is required (e.g., ENG101)')
+      return
+    }
+
+    setCreatingCategory(true)
+    try {
+      const response = await api.post('/exams/categories/', {
+        name: newCategoryName.trim(),
+        code: newCategoryCode.trim(),
+      })
+      const newCat = response.data
+      setCategories(prev => [...prev, newCat].sort((a: any, b: any) => a.name.localeCompare(b.name)))
+      setExam(prev => ({ ...prev, category: String(newCat.id) }))
+      setNewCategoryName('')
+      setNewCategoryCode('')
+      setShowCategoryForm(false)
+      toast.success('Category created successfully')
+    } catch (error: any) {
+      console.error('Failed to create category:', error)
+      toast.error(error.response?.data?.detail || 'Failed to create category')
+    } finally {
+      setCreatingCategory(false)
+    }
+  }
+
   const fetchExam = async (id: number) => {
     try {
       const response = await api.get(
         `/exams/${id}/`
       )
-      setExam(response.data)
+      const data = response.data
+      setExam(prev => ({
+        ...prev,
+        ...data,
+        category: data.category && typeof data.category === 'object' ? String(data.category.id) : (data.category || ''),
+        total_questions: data.questions?.length ?? prev.total_questions,
+      }))
     } catch (error) {
       console.error('Failed to fetch exam:', error)
     }
@@ -273,6 +314,11 @@ export default function ExamBuilder({ examId }: ExamBuilderProps) {
   const saveExam = async (publish: boolean = false) => {
     if (!exam.title.trim()) {
       toast.error('Exam title is required')
+      return
+    }
+
+    if (!exam.category) {
+      toast.error('Please select a category')
       return
     }
 
@@ -689,15 +735,67 @@ export default function ExamBuilder({ examId }: ExamBuilderProps) {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
               <select
-                value={exam.category}
-                onChange={(e) => setExam(prev => ({ ...prev, category: e.target.value }))}
+                value={showCategoryForm ? '__new__' : exam.category}
+                onChange={(e) => {
+                  const value = e.target.value
+                  if (value === '__new__') {
+                    setShowCategoryForm(true)
+                  } else {
+                    setShowCategoryForm(false)
+                    setExam(prev => ({ ...prev, category: value }))
+                  }
+                }}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg"
               >
                 <option value="">Select category</option>
                 {categories.map((cat: any) => (
                   <option key={cat.id} value={cat.id}>{cat.name}</option>
                 ))}
+                <option value="__new__">+ Create New Category...</option>
               </select>
+
+              {showCategoryForm && (
+                <div className="mt-3 p-4 border border-gray-200 rounded-lg bg-gray-50 space-y-3">
+                  <p className="text-sm font-medium text-gray-700">New Category</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <input
+                      type="text"
+                      value={newCategoryName}
+                      onChange={(e) => setNewCategoryName(e.target.value)}
+                      className="px-3 py-2 border border-gray-300 rounded-lg"
+                      placeholder="Category name (e.g., English)"
+                    />
+                    <input
+                      type="text"
+                      value={newCategoryCode}
+                      onChange={(e) => setNewCategoryCode(e.target.value)}
+                      className="px-3 py-2 border border-gray-300 rounded-lg"
+                      placeholder="Code (e.g., ENG101)"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={createCategory}
+                      disabled={creatingCategory}
+                      className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg disabled:opacity-50"
+                    >
+                      {creatingCategory ? 'Creating...' : 'Create Category'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowCategoryForm(false)
+                        setNewCategoryName('')
+                        setNewCategoryCode('')
+                      }}
+                      className="px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-lg"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div>

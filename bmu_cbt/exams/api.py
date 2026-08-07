@@ -8,6 +8,7 @@ from exams.models import Exam, ExamCategory, Question, Answer
 from exams.utils import import_exams_from_csv, import_questions_from_csv, generate_exam_template, generate_questions_template
 from utils.decorators import admin_required_ninja
 from bmu_cbt.ninja_auth import JWTAuth
+from audit.logger import record_audit
 from datetime import datetime
 from django.utils import timezone
 import random
@@ -67,6 +68,12 @@ class ExamCategorySchema(BaseModel):
     id: int
     code: str
     name: str
+    description: Optional[str] = None
+
+
+class ExamCategoryCreateSchema(BaseModel):
+    name: str
+    code: str
     description: Optional[str] = None
 
 
@@ -135,6 +142,44 @@ def list_categories(request):
         {"id": cat.id, "name": cat.name, "code": cat.code, "description": cat.description}
         for cat in categories
     ]
+
+
+@router.post("/categories/", response=ExamCategorySchema)
+@admin_required_ninja
+def create_category(request, category_data: ExamCategoryCreateSchema):
+    """Create a new exam category (admin only)"""
+    name = category_data.name.strip()
+    code = category_data.code.strip().upper()
+
+    if not name:
+        raise HttpError(400, "Category name is required")
+    if not code:
+        raise HttpError(400, "Category code is required")
+
+    if ExamCategory.objects.filter(name__iexact=name).exists():
+        raise HttpError(400, f"A category named '{name}' already exists")
+    if ExamCategory.objects.filter(code__iexact=code).exists():
+        raise HttpError(400, f"Category code '{code}' is already in use")
+
+    category = ExamCategory.objects.create(
+        name=name,
+        code=code,
+        description=(category_data.description or '').strip(),
+    )
+    record_audit(
+        request,
+        'category.create',
+        label=f"Category '{category.name}' ({category.code}) created",
+        model_name='ExamCategory',
+        object_id=category.id,
+        details={'name': category.name, 'code': category.code},
+    )
+    return {
+        "id": category.id,
+        "name": category.name,
+        "code": category.code,
+        "description": category.description,
+    }
 
 
 @router.get("/categories/{category_id}/", response=ExamCategorySchema)
@@ -364,7 +409,7 @@ def get_exam_questions(request, exam_id: int):
                 'image': q.shared_image.image.url if q.shared_image.image else None,
                 'caption': q.shared_image.caption
             } if q.shared_image else None,
-            'answers': [{'id': a.id, 'answer_text': a.answer_text, 'order': a.order} for a in (q._shuffled_answers or list(q.answers.all().order_by('order')))],
+            'answers': [{'id': a.id, 'answer_text': a.answer_text, 'order': a.order} for a in (getattr(q, '_shuffled_answers', None) or list(q.answers.all().order_by('order')))],
         }
         for q in questions
     ]
@@ -401,6 +446,15 @@ def create_exam(request, exam_data: ExamCreateSchema):
             allow_review=exam_data.allow_review,
             status='draft',  # New exams start as draft
             total_questions=0  # Will be updated when questions are added
+        )
+
+        record_audit(
+            request,
+            'exam.create',
+            label=f"Exam '{exam.title}' created",
+            model_name='Exam',
+            object_id=exam.id,
+            details={'category': category.name, 'duration_minutes': exam.duration_minutes},
         )
         
         # Return as dictionary
@@ -479,6 +533,15 @@ def create_question(request, exam_id: int, question_data: QuestionCreateSchema):
         # Update exam question count
         exam.total_questions = exam.questions.count()
         exam.save()
+
+        record_audit(
+            request,
+            'question.create',
+            label=f"Question added to exam '{exam.title}'",
+            model_name='Question',
+            object_id=question.id,
+            details={'exam_id': exam.id, 'question_type': question.question_type},
+        )
         
         return {
             'id': question.id,
@@ -486,6 +549,69 @@ def create_question(request, exam_id: int, question_data: QuestionCreateSchema):
         }
     except Exception as e:
         raise HttpError(400, f"Error creating question: {str(e)}")
+
+
+@router.post("/{exam_id}/questions/bulk/")
+@admin_required_ninja
+def bulk_create_questions(request, exam_id: int, questions_data: List[QuestionCreateSchema]):
+    """Replace all questions for an exam (frontend always sends the full list)"""
+    exam = get_object_or_404(Exam, id=exam_id)
+    
+    try:
+        # Remove existing questions so repeated saves don't duplicate them
+        exam.questions.all().delete()
+
+        created_questions = []
+        
+        for question_data in questions_data:
+            # Create question
+            question = Question.objects.create(
+                exam=exam,
+                question_text=question_data.question_text,
+                question_type=question_data.question_type,
+                marks=question_data.marks,
+                order=question_data.order,
+                correct_answer=question_data.correct_answer,
+                latex_content=question_data.latex_content,
+                diagram_image=question_data.diagram_image,
+                equation_type=question_data.equation_type,
+                explanation=question_data.explanation,
+                comprehension_passage=question_data.comprehension_passage,
+                comprehension_group=question_data.comprehension_group,
+                shared_image_id=question_data.shared_image_id
+            )
+            
+            # Create answer options if provided
+            if question_data.answers:
+                for answer_data in question_data.answers:
+                    Answer.objects.create(
+                        question=question,
+                        answer_text=answer_data.get('answer_text', ''),
+                        is_correct=answer_data.get('is_correct', False),
+                        order=answer_data.get('order', 0)
+                    )
+            
+            created_questions.append(question)
+        
+        # Update exam question count
+        exam.total_questions = len(created_questions)
+        exam.save()
+
+        record_audit(
+            request,
+            'question.bulk_update',
+            label=f"Bulk updated {len(created_questions)} questions for exam '{exam.title}'",
+            model_name='Exam',
+            object_id=exam.id,
+            details={'question_count': len(created_questions)},
+        )
+        
+        return {
+            'message': f'{len(created_questions)} questions created successfully',
+            'question_ids': [q.id for q in created_questions]
+        }
+    except Exception as e:
+        raise HttpError(400, f"Error creating questions: {str(e)}")
 
 
 @router.put("/{exam_id}/questions/{question_id}/")
@@ -524,6 +650,15 @@ def update_question(request, exam_id: int, question_id: int, question_data: Ques
                     is_correct=answer_data.get('is_correct', False),
                     order=answer_data.get('order', 0)
                 )
+
+        record_audit(
+            request,
+            'question.update',
+            label=f"Question #{question.id} updated in exam '{exam.title}'",
+            model_name='Question',
+            object_id=question.id,
+            details={'exam_id': exam.id},
+        )
         
         return {
             'id': question.id,
@@ -551,61 +686,19 @@ def delete_question(request, exam_id: int, question_id: int):
         
         exam.total_questions = remaining_questions.count()
         exam.save()
+
+        record_audit(
+            request,
+            'question.delete',
+            label=f"Question #{question_id} deleted from exam '{exam.title}'",
+            model_name='Question',
+            object_id=question_id,
+            details={'exam_id': exam.id},
+        )
         
         return {'message': 'Question deleted successfully'}
     except Exception as e:
         raise HttpError(400, f"Error deleting question: {str(e)}")
-
-
-@router.post("/{exam_id}/questions/bulk/")
-@admin_required_ninja
-def bulk_create_questions(request, exam_id: int, questions_data: List[QuestionCreateSchema]):
-    """Create multiple questions at once"""
-    exam = get_object_or_404(Exam, id=exam_id)
-    
-    try:
-        created_questions = []
-        
-        for question_data in questions_data:
-            # Create question
-            question = Question.objects.create(
-                exam=exam,
-                question_text=question_data.question_text,
-                question_type=question_data.question_type,
-                marks=question_data.marks,
-                order=question_data.order,
-                correct_answer=question_data.correct_answer,
-                latex_content=question_data.latex_content,
-                diagram_image=question_data.diagram_image,
-                equation_type=question_data.equation_type,
-                explanation=question_data.explanation,
-                comprehension_passage=question_data.comprehension_passage,
-                comprehension_group=question_data.comprehension_group,
-                shared_image_id=question_data.shared_image_id
-            )
-            
-            # Create answer options if provided
-            if question_data.answers:
-                for answer_data in question_data.answers:
-                    Answer.objects.create(
-                        question=question,
-                        answer_text=answer_data.get('answer_text', ''),
-                        is_correct=answer_data.get('is_correct', False),
-                        order=answer_data.get('order', 0)
-                    )
-            
-            created_questions.append(question)
-        
-        # Update exam question count
-        exam.total_questions = len(created_questions)
-        exam.save()
-        
-        return {
-            'message': f'{len(created_questions)} questions created successfully',
-            'question_ids': [q.id for q in created_questions]
-        }
-    except Exception as e:
-        raise HttpError(400, f"Error creating questions: {str(e)}")
 
 
 @router.put("/{exam_id}/")
@@ -637,6 +730,14 @@ def update_exam(request, exam_id: int, exam_data: ExamCreateSchema):
             exam.status = _to_model_exam_status(exam_data.status)
         
         exam.save()
+
+        record_audit(
+            request,
+            'exam.update',
+            label=f"Exam '{exam.title}' updated",
+            model_name='Exam',
+            object_id=exam.id,
+        )
         
         return {
             "id": exam.id,
@@ -668,6 +769,15 @@ def update_exam_status(request, exam_id: int, payload: ExamStatusUpdateSchema):
 
     exam.status = new_status
     exam.save(update_fields=['status'])
+
+    record_audit(
+        request,
+        'exam.status_change',
+        label=f"Exam '{exam.title}' status changed to {_to_api_exam_status(exam.status)}",
+        model_name='Exam',
+        object_id=exam.id,
+        details={'status': _to_api_exam_status(exam.status)},
+    )
 
     return {
         "id": exam.id,
@@ -718,6 +828,12 @@ def import_exams(request, csv_file: UploadedFile = File(...)):
         result = import_exams_from_csv(csv_content, request.user)
         
         if result['success']:
+            record_audit(
+                request,
+                'exam.bulk_import',
+                label=f"Bulk imported {result['imported']} exams from CSV",
+                details={'imported': result['imported'], 'errors': len(result.get('errors', []))},
+            )
             return {
                 "message": result['message'],
                 "imported": result['imported'],
@@ -742,6 +858,12 @@ def import_questions(request, csv_file: UploadedFile = File(...)):
         result = import_questions_from_csv(csv_content, request.user)
         
         if result['success']:
+            record_audit(
+                request,
+                'question.bulk_import',
+                label=f"Bulk imported {result['imported']} questions from CSV",
+                details={'imported': result['imported'], 'errors': len(result.get('errors', []))},
+            )
             return {
                 "message": result['message'],
                 "imported": result['imported'],

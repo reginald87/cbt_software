@@ -11,6 +11,7 @@ from django.utils import timezone
 from rest_framework_simplejwt.tokens import RefreshToken
 from users.models import User, UserSession
 from users.ip_security import get_client_ip, log_user_session
+from audit.logger import record_audit
 
 router = Router()
 
@@ -98,9 +99,22 @@ def login(request, payload: LoginSchema):
     user = authenticate(username=payload.username, password=payload.password)
     
     if not user:
+        record_audit(
+            request,
+            'auth.login_failed',
+            label=f"Failed login attempt for '{payload.username}'",
+            details={'username': payload.username},
+        )
         raise HttpError(401, "Invalid username or password")
     
     if not user.is_active:
+        record_audit(
+            request,
+            'auth.login_failed',
+            label=f"Disabled account login attempt for '{payload.username}'",
+            user=user,
+            details={'username': payload.username},
+        )
         raise HttpError(403, "User account is disabled")
     
     # Generate tokens
@@ -112,6 +126,16 @@ def login(request, payload: LoginSchema):
     profile_picture_url = None
     if user.profile_picture:
         profile_picture_url = user.profile_picture.url
+
+    record_audit(
+        request,
+        'auth.login',
+        label=f"User '{user.username}' logged in",
+        user=user,
+        model_name='User',
+        object_id=user.id,
+        details={'user_type': user.user_type},
+    )
     
     return {
         "access": tokens['access'],
@@ -200,6 +224,15 @@ def change_password(request, payload: ChangePasswordSchema):
     user.is_first_login = False
     user.temporary_plain_password = None
     user.save()
+
+    record_audit(
+        request,
+        'auth.change_password',
+        label=f"User '{user.username}' changed their password",
+        user=user,
+        model_name='User',
+        object_id=user.id,
+    )
     
     # Invalidate all existing sessions
     UserSession.objects.filter(
@@ -246,6 +279,15 @@ def logout(request):
             user=user,
             session_key=session_key
         ).update(is_active=False, logout_time=timezone.now())
+
+    record_audit(
+        request,
+        'auth.logout',
+        label=f"User '{user.username}' logged out",
+        user=user,
+        model_name='User',
+        object_id=user.id,
+    )
 
     return {"message": "Logged out successfully"}
 

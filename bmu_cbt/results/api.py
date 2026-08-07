@@ -11,6 +11,7 @@ from exams.models import Exam, Question, Answer
 from users.models import User, UserSession
 from ninja.errors import HttpError
 from bmu_cbt.ninja_auth import JWTAuth
+from audit.logger import record_audit
 
 router = Router(auth=JWTAuth())
 
@@ -287,6 +288,13 @@ def regrade_all_attempts(request):
                 'attempt_id': attempt.id,
                 'error': str(e)
             })
+
+    record_audit(
+        request,
+        'exam.regrade_all',
+        label=f"Admin regraded {attempts.count()} exam attempts",
+        details={'total_attempts': attempts.count()},
+    )
     
     return {
         'total_attempts': attempts.count(),
@@ -929,6 +937,21 @@ def submit_exam(request, attempt_id: int):
         notify_exam_submission(attempt)
     except Exception as e:
         print(f"Failed to create notification: {e}")
+
+    record_audit(
+        request,
+        'exam.submit',
+        label=f"User '{request.user.username}' submitted exam '{attempt.exam.title}'",
+        user=request.user,
+        model_name='ExamAttempt',
+        object_id=attempt.id,
+        details={
+            'exam_id': attempt.exam_id,
+            'percentage': percentage,
+            'is_passed': attempt.is_passed,
+            'is_late': is_late,
+        },
+    )
     
     return {
         "id": attempt.id,

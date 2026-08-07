@@ -18,6 +18,27 @@ DEBUG = True
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1').split(',')
 
 
+def _get_lan_ipv4_addresses():
+    """Return the machine's non-loopback IPv4 addresses (for LAN access)."""
+    import socket
+    addresses = []
+    try:
+        for info in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
+            ip = info[4][0]
+            if not ip.startswith('127.') and ip not in addresses:
+                addresses.append(ip)
+    except socket.gaierror:
+        pass
+    return addresses
+
+
+LAN_IPS = _get_lan_ipv4_addresses()
+
+# Allow students on the same network to reach the API when DEBUG is on
+if DEBUG:
+    ALLOWED_HOSTS += LAN_IPS
+
+
 INSTALLED_APPS = [
     'jazzmin',  # Must be first to override admin templates
     'django.contrib.admin',
@@ -39,6 +60,7 @@ INSTALLED_APPS = [
     'users.apps.UsersConfig',
     'exams.apps.ExamsConfig',
     'results.apps.ResultsConfig',
+    'audit.apps.AuditConfig',
     'utils.apps.UtilsConfig',
 ]
 
@@ -272,6 +294,10 @@ SIMPLE_JWT = {
 
 # CORS Configuration
 CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', default='http://localhost:3000,http://localhost:3001,http://localhost:3002,http://localhost:8000').split(',')
+
+# Allow LAN origins (student machines) when DEBUG is on
+if DEBUG:
+    CORS_ALLOWED_ORIGINS += [f'http://{ip}:3000' for ip in LAN_IPS]
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_HEADERS = [
     'accept',

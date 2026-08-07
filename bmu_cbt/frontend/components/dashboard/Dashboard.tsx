@@ -18,6 +18,7 @@ import ExamMonitor from './ExamMonitor'
 import SecurityDashboard from './SecurityDashboard'
 import ExamBuilder from './ExamBuilder'
 import AnalyticsDashboard from './AnalyticsDashboard'
+import AuditLogs from './AuditLogs'
 import LoadingSpinner from './LoadingSpinner'
 import EmptyState from './EmptyState'
 import ErrorBoundary from './ErrorBoundary'
@@ -73,6 +74,8 @@ export default function Dashboard() {
                 return <AdminExamReview />
               case 'analytics':
                 return <AnalyticsDashboard />
+              case 'audit-logs':
+                return <AuditLogs />
               case 'take-exam':
                 return activeExamSession ? (
                   <TakeExam

@@ -18,7 +18,8 @@ import {
   X,
   ClipboardCheck,
   Activity,
-  TrendingUp
+  TrendingUp,
+  History
 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 
@@ -44,8 +45,9 @@ export default function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
     { id: 'analytics', label: 'Analytics', icon: TrendingUp },
     { id: 'admin-tools', label: 'Admin Tools', icon: Settings },
     { id: 'review-exams', label: 'Review Exams', icon: ClipboardCheck },
+    { id: 'audit-logs', label: 'Audit Logs', icon: History },
   ].filter((item) => {
-    if (item.id === 'bulk-import' || item.id === 'review-exams' || item.id === 'bulk-upload' || item.id === 'admin-tools' || item.id === 'exam-monitor' || item.id === 'security-dashboard' || item.id === 'exam-builder' || item.id === 'analytics') {
+    if (item.id === 'bulk-import' || item.id === 'review-exams' || item.id === 'bulk-upload' || item.id === 'admin-tools' || item.id === 'exam-monitor' || item.id === 'security-dashboard' || item.id === 'exam-builder' || item.id === 'analytics' || item.id === 'audit-logs') {
       return !!user?.is_superuser
     }
     return true

@@ -7,6 +7,7 @@ from django.http import HttpResponse
 from django.core.exceptions import ValidationError
 from users.models import UserSession, User
 from users.ip_security import get_client_ip
+from audit.logger import record_audit
 import csv
 import io
 from datetime import datetime
@@ -309,6 +310,17 @@ def process_bulk_student_data(request, students_data: List[BulkStudentUploadSche
             group.user_set.add(*members)
         except Group.DoesNotExist:
             pass
+
+    record_audit(
+        request,
+        'user.bulk_create',
+        label=f"Bulk created {len(users_to_create)} student accounts",
+        details={
+            'total_rows': len(students_data),
+            'successful': len(users_to_create),
+            'failed': len(failed_rows),
+        },
+    )
 
     return {
         'total_rows': len(students_data),
