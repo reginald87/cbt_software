@@ -109,6 +109,20 @@ class ExamDetailSchema(BaseModel):
     questions: List[QuestionSchema] = []
 
 
+# Admin-only variant that also exposes which answer is correct.
+# Used by the Exam Builder so the correct answer survives edits.
+class AnswerAdminSchema(AnswerSchema):
+    is_correct: Optional[bool] = None
+
+
+class QuestionAdminSchema(QuestionSchema):
+    answers: List[AnswerAdminSchema] = []
+
+
+class ExamAdminDetailSchema(ExamDetailSchema):
+    questions: List[QuestionAdminSchema] = []
+
+
 class ExamCreateSchema(BaseModel):
     title: str
     category_id: int
@@ -252,9 +266,13 @@ def get_current_exam(request):
     }
 
 
-@router.get("/{exam_id}/", response=ExamDetailSchema)
+@router.get("/{exam_id}/", response=ExamAdminDetailSchema)
 def get_exam_detail(request, exam_id: int):
-    """Get detailed exam information including all questions and answers"""
+    """Get detailed exam information including all questions and answers.
+
+    Admin callers also receive `is_correct` on each answer so the Exam
+    Builder can reopen and re-save without losing the correct answer.
+    """
     exam = get_object_or_404(Exam, id=exam_id)
     is_admin = getattr(request.user, 'is_superuser', False)
     
@@ -294,6 +312,7 @@ def get_exam_detail(request, exam_id: int):
                         'id': a.id,
                         'answer_text': a.answer_text,
                         'order': a.order,
+                        'is_correct': a.is_correct if is_admin else None,
                     }
                     for a in q.answers.all().order_by('order')
                 ]

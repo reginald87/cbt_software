@@ -155,6 +155,13 @@ export default function ExamBuilder({ examId }: ExamBuilderProps) {
         ...data,
         category: data.category && typeof data.category === 'object' ? String(data.category.id) : (data.category || ''),
         total_questions: data.questions?.length ?? prev.total_questions,
+        questions: (data.questions || []).map((q: any) => ({
+          ...q,
+          answers: (q.answers || []).map((a: any) => ({
+            ...a,
+            is_correct: !!a.is_correct,
+          })),
+        })),
       }))
     } catch (error) {
       console.error('Failed to fetch exam:', error)
