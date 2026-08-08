@@ -58,11 +58,15 @@ The BMU CBT System is a web-based examination platform that allows administrator
 
 ### 2.2 Starting the System (Each Exam Day)
 
-1. Double-click **`start_lan.bat`**
-2. The script automatically detects the server's IP address
-3. Two windows will open — one for the backend, one for the frontend
+1. In **Windows File Explorer** (not inside VSCode's file tree), double-click **`start_lan.bat`**
+2. The script automatically detects the server's IP address and rewrites `.env`
+3. Two windows will open:
+   - **Backend** — Django under **Waitress** (production server) on port 8000
+   - **Frontend** — Next.js production build on port 3000
 4. Students can now access the system at: `http://<server-IP>:3000`
 5. The IP address will be displayed in the startup window
+
+> **Note:** If `start_lan.bat` opens as code inside VSCode, you double-clicked it in VSCode's file explorer panel — that panel always opens files as text. Double-click it in **Windows Explorer** instead, or run it from a terminal with `.\start_lan.bat`.
 
 ### 2.3 Updating the System (After a Git Pull)
 
@@ -91,7 +95,8 @@ Whenever new code is pushed to GitHub, the server laptop must be updated before 
 5. Start the system with **`start_lan.bat`** — it auto-detects the server's IP, updates `.env`, and launches both servers.
 
 **Important**
-- Always use the production server on the exam laptop: `npm run build` followed by `npm run start`. **Do not use `npm run dev`** — it is only for development and is not suited to serving students.
+- The backend must run under **Waitress** (this is what `start_lan.bat` does). **Do not use `manage.py runserver`** on exam day — it is the development server and cannot handle many concurrent students.
+- Always use the production frontend: `npm run build` followed by `next start` (which is what `start_lan.bat` runs). **Do not use `npm run dev`** — it is only for development and is not suited to serving students.
 - Ensure Windows Firewall allows inbound connections on ports **3000** (frontend) and **8000** (backend), otherwise students cannot reach the system.
 - The frontend detects the API address automatically from the browser address bar, so no URL configuration is needed after changing the laptop's IP — only `.env` (updated automatically by `start_lan.bat`) and the firewall rules matter.
 
@@ -100,6 +105,65 @@ Whenever new code is pushed to GitHub, the server laptop must be updated before 
 - **URL:** `http://<server-IP>:8000/admin/`
 - Login with the admin superuser credentials
 - Default admin accounts: `BMU-0519`, `BMU-2748`, `BMU-7694`
+
+### 2.5 Installing on a New Machine (XAMPP + MariaDB)
+
+Git does **not** contain the virtual environment, Node packages, the built frontend, `.env`, uploaded media, or the database — all of these are recreated on each machine. To set up a second server or replace the exam laptop:
+
+1. **Install prerequisites:**
+   - Python 3.13
+   - Node.js (LTS)
+   - XAMPP — MariaDB is included; start **MySQL** in the XAMPP Control Panel (it listens on port 3306)
+
+2. **Clone the repository** and open a terminal in it:
+   ```
+   git clone https://github.com/reginald87/cbt_software.git
+   cd cbt_software
+   ```
+
+3. **Backend dependencies** (create the venv where the startup script expects it):
+   ```
+   python -m venv bmu_cbt\venv
+   bmu_cbt\venv\Scripts\python.exe -m pip install -r bmu_cbt\requirements_new.txt
+   ```
+
+4. **Frontend dependencies and build** (`.next` is not stored in git, so it must be built):
+   ```
+   cd bmu_cbt\frontend
+   npm install
+   npm run build
+   ```
+
+5. **Create the database and user in XAMPP's MariaDB.** The credentials below must match `start_lan.bat`, because the script rewrites `.env` with them on every start. Run this via phpMyAdmin or the MariaDB shell:
+   ```sql
+   CREATE DATABASE cbt CHARACTER SET utf8mb4;
+   CREATE USER 'cbt_user'@'localhost' IDENTIFIED BY 'BMUcbt@2026';
+   CREATE USER 'cbt_user'@'127.0.0.1' IDENTIFIED BY 'BMUcbt@2026';
+   GRANT ALL PRIVILEGES ON cbt.* TO 'cbt_user'@'localhost';
+   GRANT ALL PRIVILEGES ON cbt.* TO 'cbt_user'@'127.0.0.1';
+   FLUSH PRIVILEGES;
+   ```
+   To use different credentials, edit the `DB_*` lines near the top of `start_lan.bat`.
+
+6. **Create the tables** (the new database starts empty):
+   ```
+   bmu_cbt\venv\Scripts\python.exe bmu_cbt\manage.py migrate
+   ```
+
+7. **Copy your data from the existing server.** On the old server, export:
+   ```
+   bmu_cbt\venv\Scripts\python.exe bmu_cbt\manage.py dumpdata --exclude contenttypes --exclude auth.Permission --exclude admin.logentry > data.json
+   ```
+   Copy `data.json` to the new machine and import it:
+   ```
+   bmu_cbt\venv\Scripts\python.exe bmu_cbt\manage.py loaddata data.json
+   ```
+
+8. **Copy the `bmu_cbt\media` folder** from the existing server (uploaded question images, screen and webcam recordings) — it is not in git.
+
+9. **Open the Windows Firewall** for inbound ports **3000** and **8000** (Windows Firewall → Advanced Settings → Inbound Rules). `start_lan.bat` does not create the rules itself.
+
+10. Double-click **`start_lan.bat`** (from Windows Explorer) to start the system.
 
 ---
 
@@ -447,6 +511,7 @@ Percentage = (Total Marks Obtained / Total Exam Marks) × 100
 | **Wrong scores** | Go to Results → select the attempt → click "Regrade" |
 | **Student locked out** | Check Sessions for IP conflicts. Clear active sessions if needed |
 | **Server IP changed** | Just run `start_lan.bat` again — it auto-detects the new IP |
+| **`start_lan.bat` opens as code in VSCode** | You double-clicked it in VSCode's file explorer. Double-click it in **Windows Explorer** instead, or run `.\start_lan.bat` in a terminal |
 
 ### Server Requirements
 

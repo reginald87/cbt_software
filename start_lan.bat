@@ -5,9 +5,10 @@ echo =============================================
 echo.
 
 :: Auto-detect LAN IP
-:: Uses the adapter that has a real default gateway (excludes VPNs and
-:: Hyper-V virtual switches, which can have 0.0.0.0 or no gateway).
-for /f "delims=" %%a in ('powershell -NoProfile -Command "Get-NetIPConfiguration | Where-Object { $_.IPv4DefaultGateway -and $_.IPv4DefaultGateway.NextHop -ne ''0.0.0.0'' -and $_.NetAdapter.Status -eq ''Up'' } | Sort-Object -Property @{Expression={$_.NetAdapter.ifIndex}} | Select-Object -First 1 | ForEach-Object { $_.IPv4Address.IPAddress }"') do set LAN_IP=%%a
+:: Uses a PowerShell helper script (avoids cmd quoting bugs) that picks the
+:: adapter with a real default gateway (excludes VPNs and Hyper-V virtual
+:: switches, which can have 0.0.0.0 or no gateway).
+for /f "delims=" %%a in ('powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0detect_lan_ip.ps1"') do set LAN_IP=%%a
 set LAN_IP=%LAN_IP: =%
 
 if "%LAN_IP%"=="" (
