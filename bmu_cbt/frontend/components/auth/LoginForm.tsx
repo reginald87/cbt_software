@@ -10,6 +10,7 @@ export default function LoginForm() {
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const router = useRouter()
   
   const { login } = useAuth()
@@ -17,6 +18,7 @@ export default function LoginForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
+    setError(null)
     
     const result = await login(username.trim(), password)
     
@@ -29,6 +31,8 @@ export default function LoginForm() {
       } else {
         router.push('/dashboard')
       }
+    } else if (result.errorMessage) {
+      setError(result.errorMessage)
     }
   }
 
@@ -68,7 +72,6 @@ export default function LoginForm() {
                 placeholder="Enter your username"
               />
             </div>
-
             <div>
               <label htmlFor="password" className="block text-sm font-medium text-gray-700">
                 Password
@@ -97,6 +100,12 @@ export default function LoginForm() {
                 </button>
               </div>
             </div>
+
+            {error && (
+              <div className="rounded-md bg-red-50 border border-red-200 px-4 py-3">
+                <p className="text-sm text-red-700">{error}</p>
+              </div>
+            )}
 
             <div>
               <button

@@ -90,8 +90,10 @@ const api: {
       }
 
       if (!response.ok) {
-        // Handle 401 - try to refresh token
-        if (response.status === 401 && !options._retried) {
+        // Handle 401 - try to refresh token (never for the login request itself)
+        const isLoginRequest = fullUrl.endsWith('/auth/login/')
+
+        if (response.status === 401 && !options._retried && !isLoginRequest) {
           const refreshToken = Cookies.get('refresh_token')
           if (refreshToken) {
             options._retried = true
@@ -118,12 +120,13 @@ const api: {
           }
         }
 
-        if (response.status === 401) {
-          // Refresh failed, clear tokens
+        if (response.status === 401 && !isLoginRequest) {
+          // Session truly expired - clear tokens and send to login
+          // (skip if already on the login page to avoid a redirect loop)
           Cookies.remove('access_token')
           Cookies.remove('refresh_token')
-          
-          if (typeof window !== 'undefined') {
+
+          if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
             window.location.href = '/login'
           }
         }

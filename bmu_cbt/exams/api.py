@@ -87,6 +87,7 @@ class ExamListSchema(BaseModel):
     status: str
     start_date: str
     end_date: str
+    server_time: str
 
 
 class ExamDetailSchema(BaseModel):
@@ -101,6 +102,7 @@ class ExamDetailSchema(BaseModel):
     status: str
     start_date: str
     end_date: str
+    server_time: str
     show_answers: bool
     show_score: bool
     shuffle_questions: bool
@@ -229,6 +231,7 @@ def list_exams(request, status: Optional[str] = Query(None)):
             'status': _to_api_exam_status(exam.status),
             'start_date': exam.start_date.isoformat() if exam.start_date else '',
             'end_date': exam.end_date.isoformat() if exam.end_date else '',
+            'server_time': timezone.now().isoformat(),
         }
         for exam in exams
     ]
@@ -263,6 +266,7 @@ def get_current_exam(request):
         'status': _to_api_exam_status(exam.status),
         'start_date': exam.start_date.isoformat() if exam.start_date else '',
         'end_date': exam.end_date.isoformat() if exam.end_date else '',
+        'server_time': timezone.now().isoformat(),
     }
 
 
@@ -294,6 +298,7 @@ def get_exam_detail(request, exam_id: int):
         'status': _to_api_exam_status(exam.status),
         'start_date': exam.start_date.isoformat(),
         'end_date': exam.end_date.isoformat(),
+        'server_time': timezone.now().isoformat(),
         'show_answers': exam.show_answers,
         'show_score': exam.show_score,
         'shuffle_questions': exam.shuffle_questions,
@@ -347,6 +352,7 @@ def get_exam_admin_detail(request, exam_id: int):
         'status': _to_api_exam_status(exam.status),
         'start_date': exam.start_date.isoformat(),
         'end_date': exam.end_date.isoformat(),
+        'server_time': timezone.now().isoformat(),
         'show_answers': exam.show_answers,
         'show_score': exam.show_score,
         'shuffle_questions': exam.shuffle_questions,

@@ -25,7 +25,7 @@ urlpatterns = [
     path('api/', api.urls),
 ]
 
-# Serve static and media files during development
-if settings.DEBUG:
-    urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+# Serve static and media files (kept unconditional so question diagrams and
+# profile pictures keep working when DEBUG=False on the exam server)
+urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
+urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import api from '@/utils/axios'
 import { BookOpen, Clock, User, AlertCircle, Shield, Play, Info, LogOut, CheckCircle } from 'lucide-react'
@@ -43,6 +43,7 @@ export default function StudentDashboard() {
   const [countdown, setCountdown] = useState(0)
   const [autoSubmitTimer, setAutoSubmitTimer] = useState<NodeJS.Timeout | null>(null)
   const [attemptedExams, setAttemptedExams] = useState<Set<number>>(new Set())
+  const serverTimeOffsetRef = useRef<number>(0)
 
   // Fetch available exams
   useEffect(() => {
@@ -57,6 +58,11 @@ export default function StudentDashboard() {
         // Fetch exams
         const examsResponse = await api.get('/exams/?status=published')
         setExams(examsResponse.data)
+
+        const serverTime = examsResponse.data?.[0]?.server_time
+        if (serverTime) {
+          serverTimeOffsetRef.current = new Date(serverTime).getTime() - Date.now()
+        }
         
         // Fetch student's attempts to identify already attempted exams
         const attemptsResponse = await api.get('/results/attempts/')
@@ -193,7 +199,8 @@ export default function StudentDashboard() {
   }
 
   const getExamStatus = (exam: ExamInfo) => {
-    const now = new Date()
+    const offset = serverTimeOffsetRef.current
+    const now = new Date(Date.now() + offset)
     const startDate = new Date(exam.start_date)
     const endDate = new Date(exam.end_date)
 

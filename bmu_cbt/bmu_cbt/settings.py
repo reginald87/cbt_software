@@ -13,7 +13,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = config('SECRET_KEY', default='django-insecure-s^j6vfedmuud=bnswpt$%bn#3+%nkc30+$0vjppa&1ieawstr7')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = config('DEBUG', default=False, cast=bool)
 
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1').split(',')
 
@@ -22,21 +22,44 @@ def _get_lan_ipv4_addresses():
     """Return the machine's non-loopback IPv4 addresses (for LAN access)."""
     import socket
     addresses = []
+
+    def _add(ip):
+        if ip and not ip.startswith('127.') and ip not in addresses:
+            addresses.append(ip)
+
     try:
         for info in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
-            ip = info[4][0]
-            if not ip.startswith('127.') and ip not in addresses:
-                addresses.append(ip)
+            _add(info[4][0])
     except socket.gaierror:
         pass
-    return addresses
+
+    # On Windows, also parse ipconfig so every active adapter is included,
+    # even if the hostname does not resolve to all of them.
+    if os.name == 'nt':
+        try:
+            import re
+            import subprocess
+            flags = 0
+            if hasattr(subprocess, 'CREATE_NO_WINDOW'):
+                flags = getattr(subprocess, 'CREATE_NO_WINDOW')
+            out = subprocess.run(
+                ['ipconfig'], capture_output=True, text=True, creationflags=flags
+            ).stdout
+            for line in out.splitlines():
+                m = re.search(r'IPv4 Address.*?:\s*(\d+\.\d+\.\d+\.\d+)', line)
+                if m:
+                    _add(m.group(1))
+        except Exception:
+            pass
+
+    # Exclude link-local addresses, which students cannot reach
+    return [ip for ip in addresses if not ip.startswith('169.254.')]
 
 
 LAN_IPS = _get_lan_ipv4_addresses()
 
-# Allow students on the same network to reach the API when DEBUG is on
-if DEBUG:
-    ALLOWED_HOSTS += LAN_IPS
+# Allow students on the same network to reach the API (always, not just in DEBUG)
+ALLOWED_HOSTS += LAN_IPS
 
 
 INSTALLED_APPS = [
@@ -68,6 +91,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
+    'bmu_cbt.middleware.DynamicHostMiddleware',
         'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -102,11 +126,27 @@ WSGI_APPLICATION = 'bmu_cbt.wsgi.application'
 
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
+# MariaDB/MySQL via PyMySQL (pure-Python driver, no compiler needed on Windows)
+
+try:
+    import pymysql
+    pymysql.install_as_MySQLdb()
+except ImportError:
+    pass
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': 'django.db.backends.mysql',
+        'NAME': config('DB_NAME', default='cbt'),
+        'USER': config('DB_USER', default='cbt_user'),
+        'PASSWORD': config('DB_PASSWORD', default=''),
+        'HOST': config('DB_HOST', default='127.0.0.1'),
+        'PORT': config('DB_PORT', default='3306'),
+        'OPTIONS': {
+            'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
+        },
+        # Timeouts so a hung DB connection surfaces quickly during exams
+        'CONN_MAX_AGE': 0,
     }
 }
 
@@ -295,9 +335,9 @@ SIMPLE_JWT = {
 # CORS Configuration
 CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', default='http://localhost:3000,http://localhost:3001,http://localhost:3002,http://localhost:8000').split(',')
 
-# Allow LAN origins (student machines) when DEBUG is on
-if DEBUG:
-    CORS_ALLOWED_ORIGINS += [f'http://{ip}:3000' for ip in LAN_IPS]
+# Allow LAN origins (student machines) - the frontend talks to the API with
+# Bearer tokens, not cookies, so reflecting any Origin is safe on the LAN.
+CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_HEADERS = [
     'accept',

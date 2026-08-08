@@ -5,9 +5,9 @@ echo =============================================
 echo.
 
 :: Auto-detect LAN IP
-for /f "tokens=2 delims=:" %%a in ('ipconfig ^| findstr /i "IPv4" ^| findstr /v "127.0.0.1" ^| findstr /v "169.254"') do (
-    for /f "tokens=*" %%b in ("%%a") do set LAN_IP=%%b
-)
+:: Uses the adapter that has a real default gateway (excludes VPNs and
+:: Hyper-V virtual switches, which can have 0.0.0.0 or no gateway).
+for /f "delims=" %%a in ('powershell -NoProfile -Command "Get-NetIPConfiguration | Where-Object { $_.IPv4DefaultGateway -and $_.IPv4DefaultGateway.NextHop -ne ''0.0.0.0'' -and $_.NetAdapter.Status -eq ''Up'' } | Sort-Object -Property @{Expression={$_.NetAdapter.ifIndex}} | Select-Object -First 1 | ForEach-Object { $_.IPv4Address.IPAddress }"') do set LAN_IP=%%a
 set LAN_IP=%LAN_IP: =%
 
 if "%LAN_IP%"=="" (
@@ -23,17 +23,24 @@ echo.
 echo Updating Django configuration...
 (
     echo SECRET_KEY=django-insecure-s^j6vfedmuud=bnswpt$%%bn#3+%%nkc30+$0vjppa^&1ieawstr7
-    echo DEBUG=True
+    echo DEBUG=False
     echo ALLOWED_HOSTS=localhost,127.0.0.1,%LAN_IP%
     echo CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:3001,http://%LAN_IP%:3000
+    echo DB_NAME=cbt
+    echo DB_USER=cbt_user
+    echo DB_PASSWORD=BMUcbt@2026
+    echo DB_HOST=127.0.0.1
+    echo DB_PORT=3306
 ) > "%~dp0bmu_cbt\.env"
 
 echo Configuration updated for IP: %LAN_IP%
 echo.
 
-:: Start Django backend on 0.0.0.0:8000
+:: Start Django backend on 0.0.0.0:8000 using Waitress (production WSGI server).
+:: Do NOT use "manage.py runserver" for exam day - it is the dev server and
+:: cannot handle hundreds of concurrent students.
 echo Starting Django backend on port 8000...
-start "Django CBT Backend" cmd /k "cd /d %~dp0bmu_cbt && ..\bmu_cbt\venv\Scripts\python.exe manage.py runserver 0.0.0.0:8000"
+start "Django CBT Backend" cmd /k "cd /d %~dp0bmu_cbt && ..\bmu_cbt\venv\Scripts\python.exe -m waitress --listen=0.0.0.0:8000 --threads=8 bmu_cbt.wsgi:application"
 
 :: Wait a moment for Django to start
 timeout /t 3 /nobreak >nul

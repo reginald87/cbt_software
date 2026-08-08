@@ -17,6 +17,8 @@ export default function SessionSecurity({ examId, attemptId, token, isActive }: 
   const [isChecking, setIsChecking] = useState(false)
   const checkIntervalRef = useRef<NodeJS.Timeout>()
   const lastActivityRef = useRef<number>(Date.now())
+  const lastActivitySentRef = useRef<number>(0)
+  const ACTIVITY_THROTTLE_MS = 10000
 
   const checkSessionValidity = async () => {
     if (!isActive || isChecking) return
@@ -64,10 +66,14 @@ export default function SessionSecurity({ examId, attemptId, token, isActive }: 
   }
 
   const updateActivity = () => {
-    lastActivityRef.current = Date.now()
-    
-    // Send activity update to server
-    if (isActive) {
+    const now = Date.now()
+    lastActivityRef.current = now
+
+    // Send activity update to server at most once every 10 seconds.
+    // Without this throttle, mousemove/scroll events would flood the server
+    // with one request per event (hundreds of requests per student per minute).
+    if (isActive && now - lastActivitySentRef.current >= ACTIVITY_THROTTLE_MS) {
+      lastActivitySentRef.current = now
       fetch(`${getApiUrl()}/results/${attemptId}/update-activity/`, {
         method: 'POST',
         headers: {
@@ -75,7 +81,7 @@ export default function SessionSecurity({ examId, attemptId, token, isActive }: 
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          timestamp: Date.now(),
+          timestamp: now,
           activity_type: 'interaction'
         })
       }).catch(error => {
@@ -142,8 +148,9 @@ export default function SessionSecurity({ examId, attemptId, token, isActive }: 
       detectEnvironmentAnomalies()
     }, 5000)
 
-    // Set up activity monitoring
-    const activityEvents = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click']
+    // Set up activity monitoring (mousemove excluded — it fires constantly
+    // and would hammer the server; updates are throttled above anyway)
+    const activityEvents = ['mousedown', 'keypress', 'scroll', 'touchstart', 'click']
     
     const handleActivity = () => {
       updateActivity()

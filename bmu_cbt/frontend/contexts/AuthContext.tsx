@@ -25,7 +25,7 @@ interface User {
 interface AuthContextType {
   user: User | null
   token: string | null
-  login: (username: string, password: string) => Promise<{ success: boolean; mustChangePassword: boolean }>
+  login: (username: string, password: string) => Promise<{ success: boolean; mustChangePassword: boolean; errorMessage?: string }>
   logout: () => void
   isLoading: boolean
   isAuthenticated: boolean
@@ -70,7 +70,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setIsLoading(false)
     } catch (error: any) {
       console.error('Token verification failed:', error)
-      
+
       // If token expired, try to refresh
       if (error.response?.status === 401) {
         const refreshSuccess = await refreshToken()
@@ -78,17 +78,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           console.log('Token refresh failed, user needs to login again')
         }
       } else {
-        // For other errors, clear tokens and logout
-        Cookies.remove('access_token')
-        Cookies.remove('refresh_token')
-        setToken(null)
-        setUser(null)
+        // Network or server error - keep the existing session and let the
+        // axios interceptor handle real auth expiry. Clearing the tokens here
+        // would log out valid students on a transient hiccup (e.g. a 500).
+        console.error('Could not verify session (non-auth error):', error)
         setIsLoading(false)
       }
     }
   }
 
-  const login = async (username: string, password: string): Promise<{ success: boolean; mustChangePassword: boolean }> => {
+  const login = async (username: string, password: string): Promise<{ success: boolean; mustChangePassword: boolean; errorMessage?: string }> => {
     setIsLoading(true)
     
     try {
@@ -125,9 +124,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (error: any) {
       console.error('Login failed:', error)
       const errorMessage = error.response?.data?.detail || 'Login failed. Please try again.'
-      toast.error(errorMessage)
       setIsLoading(false)
-      return { success: false, mustChangePassword: false }
+      return { success: false, mustChangePassword: false, errorMessage }
     }
   }
 

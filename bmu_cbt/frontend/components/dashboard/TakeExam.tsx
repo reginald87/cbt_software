@@ -151,6 +151,7 @@ export default function TakeExam({ examId, attemptId, endTimeMs, onExit }: TakeE
 
   const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null)
   const endTimeMsRef = useRef<number | null>(null)
+  const serverTimeOffsetRef = useRef<number>(0)
   const [reviewData, setReviewData] = useState<AttemptDetail | null>(null)
   const submittedRef = useRef(false)
 
@@ -166,16 +167,28 @@ export default function TakeExam({ examId, attemptId, endTimeMs, onExit }: TakeE
     const key = `bmu_cbt_attempt_${attemptId}_end_time_ms`
     const existing = window.localStorage.getItem(key)
     const durationMs = exam.duration_minutes * 60 * 1000
-    const endMs = existing ? Number(existing) : (typeof endTimeMs === 'number' ? endTimeMs : Date.now() + durationMs)
+    const correctedNow = () => Date.now() + serverTimeOffsetRef.current
+
+    let endMs: number
+    if (existing) {
+      endMs = Number(existing)
+      const expected = correctedNow() + durationMs
+      if (Math.abs(endMs - expected) > durationMs) {
+        endMs = correctedNow() + durationMs
+        window.localStorage.setItem(key, String(endMs))
+      }
+    } else {
+      endMs = typeof endTimeMs === 'number' ? endTimeMs : correctedNow() + durationMs
+      window.localStorage.setItem(key, String(endMs))
+    }
 
     endTimeMsRef.current = endMs
-    if (!existing) window.localStorage.setItem(key, String(endMs))
 
     const tick = () => {
       if (submittedRef.current) return
       const endTimeMs = endTimeMsRef.current
       if (!endTimeMs) return
-      const left = Math.ceil((endTimeMs - Date.now()) / 1000)
+      const left = Math.ceil((endTimeMs - correctedNow()) / 1000)
       setRemainingSeconds(left)
       if (left <= 0) {
         void submitExam()
@@ -198,6 +211,11 @@ export default function TakeExam({ examId, attemptId, endTimeMs, onExit }: TakeE
         api.get(`/exams/${examId}/`),
         api.get(`/exams/${examId}/questions/`),
       ])
+
+      const serverTime = examRes.data?.server_time
+      if (serverTime) {
+        serverTimeOffsetRef.current = new Date(serverTime).getTime() - Date.now()
+      }
 
       setExam(examRes.data)
       setQuestions(qRes.data || [])
