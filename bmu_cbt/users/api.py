@@ -207,6 +207,7 @@ def process_bulk_student_data(request, students_data: List[BulkStudentUploadSche
     from django.contrib.auth.hashers import make_password
     from django.contrib.auth.models import Group
     from django.conf import settings
+    from concurrent.futures import ThreadPoolExecutor
 
     if not request.user.is_superuser:
         raise HttpError(403, "Admin access required")
@@ -220,6 +221,19 @@ def process_bulk_student_data(request, students_data: List[BulkStudentUploadSche
                         .values_list('jamb_number', flat=True))
 
     usernames = _generate_bulk_usernames(len(students_data), existing_usernames)
+
+    # Hash all generated passwords in parallel. hashlib releases the GIL, so
+    # threads give a real speedup (this machine takes ~0.8s/password, which
+    # would make an 800-student import take ~10 minutes if done one by one).
+    def _generate_and_hash():
+        tmp = User()
+        pwd = tmp.generate_password()
+        return pwd, make_password(pwd, hasher='pbkdf2_sha256_temp')
+
+    workers = min(8, max(1, len(students_data)))
+    with ThreadPoolExecutor(max_workers=workers) as executor:
+        hashed_creds = list(executor.map(
+            lambda _: _generate_and_hash(), range(len(students_data))))
 
     user_type_by_group = {
         'matriculated': 'matriculated_students',
@@ -245,8 +259,6 @@ def process_bulk_student_data(request, students_data: List[BulkStudentUploadSche
                 department=student_data.department,
                 course=student_data.course or '',
                 year_of_entry=student_data.year_of_entry,
-                is_first_login=True,
-                temporary_password=True,
                 is_staff=False,
                 is_superuser=False
             )
@@ -258,14 +270,14 @@ def process_bulk_student_data(request, students_data: List[BulkStudentUploadSche
                 raise ValidationError("JAMB number already exists")
 
             username = usernames[i - 1]
-            password = user.generate_password()
+            password, hashed = hashed_creds[i - 1]
 
             user.username = username
-            # Store temporary plain password for credential export and use the
-            # faster temporary hasher so large batches import quickly. Students
-            # are forced to change their password on first login.
+            # Store the plain password for the credential export and use the
+            # faster hasher so large batches import quickly. The generated
+            # password is the student's permanent password (no forced change).
             user.temporary_plain_password = password
-            user.password = make_password(password, hasher='pbkdf2_sha256_temp')
+            user.password = hashed
 
             user.full_clean()
 
@@ -337,9 +349,9 @@ def export_credentials_csv(request):
     if not request.user.is_superuser:
         raise HttpError(403, "Admin access required")
     
-    # Get recently created students (those with temporary passwords)
+    # Get students whose credentials haven't been exported yet (their plain
+    # password is still stored; it is cleared after export).
     recent_students = User.objects.filter(
-        temporary_password=True,
         is_staff=False,
         is_superuser=False,
         temporary_plain_password__isnull=False

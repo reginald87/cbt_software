@@ -37,6 +37,14 @@ echo Updating Django configuration...
 echo Configuration updated for IP: %LAN_IP%
 echo.
 
+:: Collect static files (admin/jazzmin CSS & JS). Required in production -
+:: with DEBUG=False the admin theme is served from the collected staticfiles
+:: folder, and a fresh machine won't have it until this runs.
+cd /d %~dp0bmu_cbt
+echo Collecting static files...
+..\bmu_cbt\venv\Scripts\python.exe manage.py collectstatic --noinput
+cd /d %~dp0
+
 :: Start Django backend on 0.0.0.0:8000 using Waitress (production WSGI server).
 :: Do NOT use "manage.py runserver" for exam day - it is the dev server and
 :: cannot handle hundreds of concurrent students.

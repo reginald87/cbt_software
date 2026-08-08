@@ -1,11 +1,23 @@
 import re
 import secrets
-import string
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.core.exceptions import ValidationError
 from django.utils.crypto import get_random_string
 from django.utils import timezone
+
+# Short, easy-to-spell words used to build friendly auto-generated passwords
+# (e.g. "river-mango-42"). Kept lowercase and unambiguous so students can
+# read them off the printed credential sheet and type them without mistakes.
+FRIENDLY_PASSWORD_WORDS = [
+    'apple', 'beach', 'candle', 'cloud', 'dream', 'eagle', 'forest',
+    'garden', 'gold', 'hammer', 'honey', 'island', 'jungle', 'kettle',
+    'king', 'lamp', 'lemon', 'mango', 'moon', 'night', 'ocean', 'orange',
+    'paper', 'piano', 'queen', 'rabbit', 'river', 'stone', 'sun', 'tiger',
+    'tree', 'umbrella', 'valley', 'violin', 'water', 'window', 'wind',
+    'yellow', 'zebra', 'anchor', 'bridge', 'coffee', 'dragon', 'flower',
+    'lantern', 'marble', 'nectar', 'parade', 'quartz', 'rocket', 'silver',
+]
 
 
 def validate_matric_number(value):
@@ -63,8 +75,8 @@ class User(AbstractUser):
     )
     department = models.CharField(max_length=200, blank=True, null=True)
     course = models.CharField(max_length=200, blank=True)
-    is_first_login = models.BooleanField(default=True)
-    temporary_password = models.BooleanField(default=True)
+    is_first_login = models.BooleanField(default=False)
+    temporary_password = models.BooleanField(default=False)
     temporary_plain_password = models.CharField(
         max_length=255,
         blank=True,
@@ -136,11 +148,13 @@ class User(AbstractUser):
                 return username
     
     def generate_password(self):
-        """Generate secure password"""
-        password_length = 8
-        alphabet = string.ascii_letters + string.digits + "!@#$%"
-        password = ''.join(secrets.choice(alphabet) for _ in range(password_length))
-        return password
+        """Generate a friendly, readable password students keep (word-word-NN)."""
+        w1 = secrets.choice(FRIENDLY_PASSWORD_WORDS)
+        w2 = secrets.choice(FRIENDLY_PASSWORD_WORDS)
+        while w2 == w1:
+            w2 = secrets.choice(FRIENDLY_PASSWORD_WORDS)
+        number = secrets.randbelow(90) + 10  # 10-99
+        return f"{w1}-{w2}-{number}"
     
     def save(self, *args, **kwargs):
         """Override save to ensure username generation"""
