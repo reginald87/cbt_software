@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import api from '@/utils/axios'
 import { 
@@ -99,6 +99,7 @@ export default function ExamBuilder({ examId }: ExamBuilderProps) {
   const [newCategoryName, setNewCategoryName] = useState('')
   const [newCategoryCode, setNewCategoryCode] = useState('')
   const [creatingCategory, setCreatingCategory] = useState(false)
+  const questionsEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     fetchCategories()
@@ -206,6 +207,11 @@ export default function ExamBuilder({ examId }: ExamBuilderProps) {
       questions: [...prev.questions, newQuestion],
       total_questions: prev.questions.length + 1
     }))
+
+    // Scroll to the newly added question so the admin never has to hunt for it.
+    setTimeout(() => {
+      questionsEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, 50)
   }
 
   const updateQuestion = (index: number, field: keyof Question, value: any) => {
@@ -970,8 +976,8 @@ export default function ExamBuilder({ examId }: ExamBuilderProps) {
         </div>
       ) : (
         <div className="space-y-6">
-          {/* Add Question Buttons */}
-          <div className="flex flex-wrap gap-3">
+          {/* Add Question Buttons (sticky so they stay visible while adding many questions) */}
+          <div className="sticky top-0 z-10 bg-gray-50/95 backdrop-blur rounded-xl border border-gray-200 shadow-sm p-3 flex flex-wrap gap-3">
             <button
               onClick={() => addQuestion('multiple')}
               className="flex items-center gap-2 px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg"
@@ -1034,6 +1040,9 @@ export default function ExamBuilder({ examId }: ExamBuilderProps) {
           <div className="space-y-4">
             {exam.questions.map((question, index) => renderQuestionEditor(question, index))}
           </div>
+
+          {/* Sentinel used to scroll to the newest question after adding */}
+          <div ref={questionsEndRef} className="h-2" />
         </div>
       )}
     </div>

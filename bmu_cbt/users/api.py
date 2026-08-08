@@ -52,6 +52,13 @@ class BulkUploadResultSchema(BaseModel):
     credentials: List[dict]
 
 
+class CredentialRegenerateSchema(BaseModel):
+    """Filters for regenerating existing student credentials"""
+    user_type: Optional[str] = None
+    department: Optional[str] = None
+    user_ids: Optional[List[int]] = None
+
+
 # ==================== Endpoints ====================
 
 @router.get("/sessions/", response=List[UserSessionSchema])
@@ -344,7 +351,7 @@ def process_bulk_student_data(request, students_data: List[BulkStudentUploadSche
 
 
 @router.get("/bulk-upload/credentials/export/")
-def export_credentials_csv(request):
+def export_credentials_csv(request, user_type: Optional[str] = None, department: Optional[str] = None):
     """Export student credentials as CSV for printing"""
     if not request.user.is_superuser:
         raise HttpError(403, "Admin access required")
@@ -355,7 +362,12 @@ def export_credentials_csv(request):
         is_staff=False,
         is_superuser=False,
         temporary_plain_password__isnull=False
-    ).order_by('-created_at')
+    )
+    if user_type:
+        recent_students = recent_students.filter(user_type=user_type)
+    if department:
+        recent_students = recent_students.filter(department__icontains=department)
+    recent_students = recent_students.order_by('matric_number', 'jamb_number')
     
     # Create CSV
     output = io.StringIO()
@@ -401,3 +413,76 @@ def export_credentials_csv(request):
     response['Content-Disposition'] = f'attachment; filename="student_credentials_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv"'
     
     return response
+
+
+@router.get("/bulk-upload/credentials/status/")
+def credentials_status(request):
+    """Return counts of students whose credentials are pending export"""
+    if not request.user.is_superuser:
+        raise HttpError(403, "Admin access required")
+
+    students = User.objects.filter(is_staff=False, is_superuser=False)
+    return {
+        'pending_export': students.filter(temporary_plain_password__isnull=False).count(),
+        'total_students': students.count(),
+    }
+
+
+@router.post("/bulk-upload/credentials/regenerate/")
+def regenerate_credentials_csv(request, payload: CredentialRegenerateSchema):
+    """Regenerate passwords for existing students.
+
+    Old passwords cannot be recovered (they are stored as one-way hashes and
+    the plain copy is cleared after export), so issuing fresh credentials is
+    the only way to redistribute login details for students already in the
+    system. New friendly passwords are hashed and stored; the plain copy is
+    kept only in temporary_plain_password so it can be exported once via the
+    credentials export endpoint (which clears it).
+    """
+    from django.contrib.auth.hashers import make_password
+    from concurrent.futures import ThreadPoolExecutor
+
+    if not request.user.is_superuser:
+        raise HttpError(403, "Admin access required")
+
+    students = User.objects.filter(is_staff=False, is_superuser=False)
+    if payload.user_ids:
+        students = students.filter(id__in=payload.user_ids)
+    if payload.user_type:
+        students = students.filter(user_type=payload.user_type)
+    if payload.department and payload.department.strip():
+        students = students.filter(department__icontains=payload.department.strip())
+    students = students.order_by('matric_number', 'jamb_number')
+
+    student_list = list(students)
+    if not student_list:
+        raise HttpError(400, "No students found matching the selected criteria")
+
+    # Hash all generated passwords in parallel (same approach as bulk import).
+    def _generate_and_hash():
+        tmp = User()
+        pwd = tmp.generate_password()
+        return pwd, make_password(pwd, hasher='pbkdf2_sha256_temp')
+
+    workers = min(8, max(1, len(student_list)))
+    with ThreadPoolExecutor(max_workers=workers) as executor:
+        hashed_creds = list(executor.map(
+            lambda _: _generate_and_hash(), range(len(student_list))))
+
+    for student, (pwd, hashed) in zip(student_list, hashed_creds):
+        student.password = hashed
+        student.temporary_plain_password = pwd
+
+    User.objects.bulk_update(student_list, ['password', 'temporary_plain_password'])
+
+    record_audit(
+        request,
+        'user.credentials_regenerate',
+        label=f"Regenerated credentials for {len(student_list)} students",
+        details={
+            'count': len(student_list),
+            'filters': payload.dict(),
+        },
+    )
+
+    return {'regenerated': len(student_list)}

@@ -1,9 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import api from '@/utils/axios'
-import { Upload, Download, Users, CheckCircle, AlertCircle, FileText } from 'lucide-react'
+import { Upload, Download, Users, CheckCircle, AlertCircle, FileText, KeyRound } from 'lucide-react'
+import toast from 'react-hot-toast'
 
 interface StudentData {
   first_name: string
@@ -40,6 +41,23 @@ export default function BulkStudentUpload() {
   const [uploadResult, setUploadResult] = useState<UploadResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [dragActive, setDragActive] = useState(false)
+  const [credStatus, setCredStatus] = useState<{ pending_export: number; total_students: number } | null>(null)
+  const [credUserType, setCredUserType] = useState('')
+  const [credDepartment, setCredDepartment] = useState('')
+  const [regenerating, setRegenerating] = useState(false)
+
+  const fetchCredStatus = async () => {
+    try {
+      const response = await api.get(`/users/bulk-upload/credentials/status/`)
+      setCredStatus(response.data)
+    } catch (error) {
+      console.error('Failed to fetch credentials status:', error)
+    }
+  }
+
+  useEffect(() => {
+    fetchCredStatus()
+  }, [])
 
   const downloadTemplate = async () => {
     try {
@@ -64,26 +82,81 @@ export default function BulkStudentUpload() {
     }
   }
 
-  const exportCredentials = async () => {
+  const exportCredentials = async (userType: string = '', department: string = '') => {
     try {
+      const params: Record<string, string> = {}
+      if (userType) params.user_type = userType
+      if (department.trim()) params.department = department.trim()
+
       const response = await api.get(
         `/users/bulk-upload/credentials/export/`,
         {
-          responseType: 'blob'
+          responseType: 'blob',
+          params,
         }
       )
-      
+
+      // A CSV with only the header row means there is nothing to export.
+      const text = await response.data.text()
+      const lines = text.split('\n').filter(line => line.trim())
+      if (lines.length <= 1) {
+        setError('No credentials are pending export for the selected criteria')
+        return false
+      }
+
       const url = window.URL.createObjectURL(new Blob([response.data]))
       const link = document.createElement('a')
       link.href = url
-      link.setAttribute('download', 'student_credentials.csv')
+      const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')
+      link.setAttribute('download', `student_credentials_${stamp}.csv`)
       document.body.appendChild(link)
       link.click()
       link.remove()
       window.URL.revokeObjectURL(url)
+      fetchCredStatus()
+      return true
     } catch (error) {
       console.error('Failed to export credentials:', error)
       setError('Failed to export credentials')
+      return false
+    }
+  }
+
+  const regenerateCredentials = async () => {
+    if (!window.confirm(
+      'This will reset the passwords for the selected existing students. ' +
+      'Their new credentials will be downloaded once as a CSV. Continue?'
+    )) {
+      return
+    }
+
+    setRegenerating(true)
+    setError(null)
+    try {
+      const response = await api.post(
+        `/users/bulk-upload/credentials/regenerate/`,
+        {
+          user_type: credUserType || null,
+          department: credDepartment.trim() || null,
+        }
+      )
+
+      const count = response.data.regenerated
+      if (!count) {
+        setError('No students matched the selected criteria')
+        return
+      }
+
+      const exported = await exportCredentials(credUserType, credDepartment)
+      if (exported) {
+        toast.success(`Regenerated credentials for ${count} students`)
+        fetchCredStatus()
+      }
+    } catch (error: any) {
+      console.error('Failed to regenerate credentials:', error)
+      setError(error.response?.data?.detail || 'Failed to regenerate credentials')
+    } finally {
+      setRegenerating(false)
     }
   }
 
@@ -252,6 +325,80 @@ export default function BulkStudentUpload() {
         )}
       </div>
 
+      {/* Existing Student Credentials */}
+      <div className="bg-white rounded-xl border border-gray-200 p-6">
+        <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
+          <div>
+            <h2 className="text-xl font-semibold text-gray-900">Existing Student Credentials</h2>
+            <p className="text-gray-600 text-sm mt-1">
+              Download or regenerate login credentials for students already in the system.
+            </p>
+          </div>
+          <div className="flex gap-4">
+            <div className="bg-gray-50 rounded-lg px-4 py-2 text-center">
+              <p className="text-xs text-gray-500">Pending Export</p>
+              <p className="text-lg font-bold text-gray-900">{credStatus?.pending_export ?? '—'}</p>
+            </div>
+            <div className="bg-gray-50 rounded-lg px-4 py-2 text-center">
+              <p className="text-xs text-gray-500">Total Students</p>
+              <p className="text-lg font-bold text-gray-900">{credStatus?.total_students ?? '—'}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">User Type</label>
+            <select
+              value={credUserType}
+              onChange={(e) => setCredUserType(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+            >
+              <option value="">All Students</option>
+              <option value="matriculated">Matriculated Students</option>
+              <option value="100level">100 Level Students</option>
+              <option value="intending">Intending Students</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Department</label>
+            <input
+              type="text"
+              value={credDepartment}
+              onChange={(e) => setCredDepartment(e.target.value)}
+              placeholder="e.g., Medicine (leave blank for all)"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+            />
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-3">
+          <button
+            onClick={() => exportCredentials(credUserType, credDepartment)}
+            disabled={!credStatus || credStatus.pending_export === 0}
+            className="btn btn-outline flex items-center gap-2 disabled:opacity-50"
+          >
+            <FileText className="w-4 h-4" />
+            Download Pending Credentials
+          </button>
+          <button
+            onClick={regenerateCredentials}
+            disabled={regenerating}
+            className="btn btn-primary flex items-center gap-2 disabled:opacity-50"
+          >
+            <KeyRound className="w-4 h-4" />
+            {regenerating ? 'Regenerating...' : 'Regenerate & Download Credentials'}
+          </button>
+        </div>
+
+        {credStatus && credStatus.pending_export === 0 && credStatus.total_students > 0 && (
+          <p className="text-sm text-amber-600 mt-3">
+            No credentials are pending export. Existing students' passwords are hashed and cannot be
+            recovered — use "Regenerate &amp; Download" to issue fresh passwords.
+          </p>
+        )}
+      </div>
+
       {/* Results */}
       {uploadResult && (
         <div className="bg-white rounded-xl border border-gray-200 p-6">
@@ -259,7 +406,7 @@ export default function BulkStudentUpload() {
             <h2 className="text-xl font-semibold text-gray-900">Upload Results</h2>
             {uploadResult.credentials.length > 0 && (
               <button
-                onClick={exportCredentials}
+                onClick={() => exportCredentials()}
                 className="btn btn-primary flex items-center gap-2"
               >
                 <FileText className="w-4 h-4" />
