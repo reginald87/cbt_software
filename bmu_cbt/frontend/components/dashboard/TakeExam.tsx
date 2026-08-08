@@ -145,7 +145,8 @@ export default function TakeExam({ examId, attemptId, endTimeMs, onExit }: TakeE
   const [selectedAnswers, setSelectedAnswers] = useState<SelectedAnswers>({})
   const [shortAnswers, setShortAnswers] = useState<ShortAnswers>({})
   const [booleanAnswers, setBooleanAnswers] = useState<BooleanAnswers>({})
-  const [savingQuestionId, setSavingQuestionId] = useState<number | null>(null)
+  const [savingQuestionIds, setSavingQuestionIds] = useState<Set<number>>(new Set())
+  const saveQueuesRef = useRef<Record<number, Promise<void>>>({})
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -207,9 +208,10 @@ export default function TakeExam({ examId, attemptId, endTimeMs, onExit }: TakeE
       setError(null)
       setSubmitError(null)
 
-      const [examRes, qRes] = await Promise.all([
+      const [examRes, qRes, detailRes] = await Promise.all([
         api.get(`/exams/${examId}/`),
         api.get(`/exams/${examId}/questions/`),
+        api.get(`/results/${attemptId}/`).catch(() => null),
       ])
 
       const serverTime = examRes.data?.server_time
@@ -220,6 +222,20 @@ export default function TakeExam({ examId, attemptId, endTimeMs, onExit }: TakeE
       setExam(examRes.data)
       setQuestions(qRes.data || [])
       setActiveIndex(0)
+
+      if (detailRes?.data?.answers) {
+        const restoredSelected: SelectedAnswers = {}
+        const restoredShort: ShortAnswers = {}
+        const restoredBoolean: BooleanAnswers = {}
+        for (const ans of detailRes.data.answers) {
+          if (ans.selected_answer_id != null) restoredSelected[ans.question_id] = ans.selected_answer_id
+          if (ans.short_answer) restoredShort[ans.question_id] = ans.short_answer
+          if (ans.boolean_answer != null) restoredBoolean[ans.question_id] = ans.boolean_answer
+        }
+        setSelectedAnswers(restoredSelected)
+        setShortAnswers(restoredShort)
+        setBooleanAnswers(restoredBoolean)
+      }
     } catch (e: any) {
       console.error('ERROR: Failed to fetch exam and questions:', e)
       console.error('ERROR response:', e.response?.data)
@@ -253,25 +269,35 @@ export default function TakeExam({ examId, attemptId, endTimeMs, onExit }: TakeE
     return count
   }, [sortedQuestions, selectedAnswers, shortAnswers, booleanAnswers])
 
-  const submitAnswer = async (questionId: number, payload: { selected_answer_id?: number | null; short_answer?: string | null; boolean_answer?: boolean | null }) => {
-    try {
-      setSavingQuestionId(questionId)
-      await api.post(
-        `/results/${attemptId}/submit-answer/`,
-        {
-          question_id: questionId,
-          selected_answer_id: payload.selected_answer_id ?? null,
-          short_answer: payload.short_answer ?? null,
-          boolean_answer: payload.boolean_answer ?? null,
-          time_spent_seconds: 0,
-        }
-      )
-    } catch (e: any) {
-      console.error(e)
-      setSubmitError(e.response?.data?.detail || 'Failed to save answer')
-    } finally {
-      setSavingQuestionId(null)
+  const submitAnswer = (questionId: number, payload: { selected_answer_id?: number | null; short_answer?: string | null; boolean_answer?: boolean | null }) => {
+    const run = async () => {
+      try {
+        setSavingQuestionIds((prev) => new Set(prev).add(questionId))
+        await api.post(
+          `/results/${attemptId}/submit-answer/`,
+          {
+            question_id: questionId,
+            selected_answer_id: payload.selected_answer_id ?? null,
+            short_answer: payload.short_answer ?? null,
+            boolean_answer: payload.boolean_answer ?? null,
+            time_spent_seconds: 0,
+          }
+        )
+      } catch (e: any) {
+        console.error(e)
+        setSubmitError(e.response?.data?.detail || 'Failed to save answer')
+      } finally {
+        setSavingQuestionIds((prev) => {
+          const next = new Set(prev)
+          next.delete(questionId)
+          return next
+        })
+      }
     }
+    const prev = saveQueuesRef.current[questionId] || Promise.resolve()
+    const next = prev.then(run, run)
+    saveQueuesRef.current[questionId] = next
+    return next
   }
 
   const submitExam = async () => {
@@ -638,7 +664,7 @@ export default function TakeExam({ examId, attemptId, endTimeMs, onExit }: TakeE
                                 ? 'border-primary-400 bg-primary-50'
                                 : 'border-gray-200 bg-white hover:bg-gray-50'
                             }`}
-                            disabled={savingQuestionId === activeQuestion.id || isSubmitting}
+                            disabled={savingQuestionIds.has(activeQuestion.id) || isSubmitting}
                           >
                             <div className="flex items-start justify-between gap-3">
                               <div className="flex items-start gap-3">
@@ -667,7 +693,7 @@ export default function TakeExam({ examId, attemptId, endTimeMs, onExit }: TakeE
                             ? 'border-green-400 bg-green-50'
                             : 'border-gray-200 bg-white hover:bg-gray-50'
                         }`}
-                        disabled={savingQuestionId === activeQuestion.id || isSubmitting}
+                        disabled={savingQuestionIds.has(activeQuestion.id) || isSubmitting}
                       >
                         <div className="flex items-center justify-center gap-2">
                           <div className={`h-5 w-5 rounded-full border flex items-center justify-center ${
@@ -685,7 +711,7 @@ export default function TakeExam({ examId, attemptId, endTimeMs, onExit }: TakeE
                             ? 'border-red-400 bg-red-50'
                             : 'border-gray-200 bg-white hover:bg-gray-50'
                         }`}
-                        disabled={savingQuestionId === activeQuestion.id || isSubmitting}
+                        disabled={savingQuestionIds.has(activeQuestion.id) || isSubmitting}
                       >
                         <div className="flex items-center justify-center gap-2">
                           <div className={`h-5 w-5 rounded-full border flex items-center justify-center ${
@@ -711,7 +737,7 @@ export default function TakeExam({ examId, attemptId, endTimeMs, onExit }: TakeE
                       onBlur={() => void persistShortAnswer(activeQuestion.id)}
                       className="w-full rounded-xl border border-gray-200 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-200"
                       placeholder="Enter your answer..."
-                      disabled={savingQuestionId === activeQuestion.id || isSubmitting}
+                      disabled={savingQuestionIds.has(activeQuestion.id) || isSubmitting}
                     />
                   </div>
                 )}
@@ -725,7 +751,7 @@ export default function TakeExam({ examId, attemptId, endTimeMs, onExit }: TakeE
                       onChange={(value) => onShortAnswerChange(activeQuestion.id, value)}
                       onBlur={() => void persistShortAnswer(activeQuestion.id)}
                       placeholder="Enter your mathematical answer (supports LaTeX: x^2, \frac{a}{b}, \sqrt{x})"
-                      disabled={savingQuestionId === activeQuestion.id || isSubmitting}
+                      disabled={savingQuestionIds.has(activeQuestion.id) || isSubmitting}
                     />
                   </div>
                 )}
@@ -739,7 +765,7 @@ export default function TakeExam({ examId, attemptId, endTimeMs, onExit }: TakeE
                       onChange={(value) => onShortAnswerChange(activeQuestion.id, value)}
                       onBlur={() => void persistShortAnswer(activeQuestion.id)}
                       placeholder="Enter chemical equation (e.g., 2H2 + O2 → 2H2O)"
-                      disabled={savingQuestionId === activeQuestion.id || isSubmitting}
+                      disabled={savingQuestionIds.has(activeQuestion.id) || isSubmitting}
                     />
                   </div>
                 )}
@@ -753,7 +779,7 @@ export default function TakeExam({ examId, attemptId, endTimeMs, onExit }: TakeE
                       onChange={(value) => onShortAnswerChange(activeQuestion.id, value)}
                       onBlur={() => void persistShortAnswer(activeQuestion.id)}
                       placeholder="Enter your answer with units (e.g., 9.8 m/s^2)"
-                      disabled={savingQuestionId === activeQuestion.id || isSubmitting}
+                      disabled={savingQuestionIds.has(activeQuestion.id) || isSubmitting}
                     />
                   </div>
                 )}
@@ -769,7 +795,7 @@ export default function TakeExam({ examId, attemptId, endTimeMs, onExit }: TakeE
                       rows={5}
                       className="w-full rounded-xl border border-gray-200 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-200"
                       placeholder="Enter your answer..."
-                      disabled={savingQuestionId === activeQuestion.id || isSubmitting}
+                      disabled={savingQuestionIds.has(activeQuestion.id) || isSubmitting}
                     />
                   </div>
                 )}
@@ -793,7 +819,7 @@ export default function TakeExam({ examId, attemptId, endTimeMs, onExit }: TakeE
                                     ? 'border-primary-400 bg-primary-50'
                                     : 'border-gray-200 bg-white hover:bg-gray-50'
                                 }`}
-                                disabled={savingQuestionId === activeQuestion.id || isSubmitting}
+                                disabled={savingQuestionIds.has(activeQuestion.id) || isSubmitting}
                               >
                                 <div className="flex items-start justify-between gap-3">
                                   <div className="flex items-start gap-3">
@@ -818,7 +844,7 @@ export default function TakeExam({ examId, attemptId, endTimeMs, onExit }: TakeE
                         rows={4}
                         className="w-full rounded-xl border border-gray-200 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-200"
                         placeholder="Enter your answer based on the passage..."
-                        disabled={savingQuestionId === activeQuestion.id || isSubmitting}
+                        disabled={savingQuestionIds.has(activeQuestion.id) || isSubmitting}
                       />
                     )}
                   </div>
@@ -847,7 +873,7 @@ export default function TakeExam({ examId, attemptId, endTimeMs, onExit }: TakeE
                                     ? 'border-primary-400 bg-primary-50'
                                     : 'border-gray-200 bg-white hover:bg-gray-50'
                                 }`}
-                                disabled={savingQuestionId === activeQuestion.id || isSubmitting}
+                                disabled={savingQuestionIds.has(activeQuestion.id) || isSubmitting}
                               >
                                 <div className="flex items-start justify-between gap-3">
                                   <div className="flex items-start gap-3">
@@ -872,7 +898,7 @@ export default function TakeExam({ examId, attemptId, endTimeMs, onExit }: TakeE
                         rows={4}
                         className="w-full rounded-xl border border-gray-200 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-200"
                         placeholder="Enter your answer based on the diagram..."
-                        disabled={savingQuestionId === activeQuestion.id || isSubmitting}
+                        disabled={savingQuestionIds.has(activeQuestion.id) || isSubmitting}
                       />
                     )}
                   </div>
@@ -935,7 +961,7 @@ export default function TakeExam({ examId, attemptId, endTimeMs, onExit }: TakeE
               </div>
             </div>
 
-            {savingQuestionId ? (
+            {savingQuestionIds.size > 0 ? (
               <div className="mt-4 text-sm text-gray-500 flex items-center">
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                 Saving...
