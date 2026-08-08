@@ -1,4 +1,9 @@
-exam_title,question_text,question_type,marks,answer_options,correct_answer,explanation
-Sample Exam,What is 2+2?,multiple,5,3|4|5|6,5,Basic addition problem
-Sample Exam,The sky is blue,true_false,2,,true,Basic observation
-Sample Exam,Explain gravity,short_answer,10,,,Physics concept explanation
+exam_id,exam_title,question_text,question_type,marks,answer_options,correct_answer,latex_content,diagram_image,equation_type,explanation
+,Sample Exam,What is 2+2?,multiple,5,3|4|5|6,5,,,,"Basic addition problem"
+,Sample Exam,Which gas do plants absorb?,multiple,2,CO2|O2|N2|H2O,CO2,,,,"Photosynthesis basics"
+,Sample Exam,The sky is blue,true_false,2,,true,,,,"Basic observation"
+,Sample Exam,The chemical symbol for water is ____,fill_blank,2,,H2O,,,,"Chemistry basics"
+,Sample Exam,Solve for x: 2x + 4 = 10,math,5,,,2x + 4 = 10,,algebraic,Basic algebra
+,Sample Exam,Balance: H2 + O2 -> H2O,chemistry,5,,,H2 + O2 -> H2O,,chemical,Balance the equation
+,Sample Exam,Identify the plant cell organelle,physics,5,Mitochondria|Chloroplast|Nucleus,Chloroplast,,plant_cell.png,physics,Diagram-based question
+,Sample Exam,Explain gravity,short,10,,,,,,Physics concept explanation

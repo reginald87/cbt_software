@@ -80,10 +80,15 @@ export default function BulkImport() {
     const template = activeTab === 'exams'
       ? `exam_title,category_code,description,duration_minutes,total_questions,passing_score,difficulty_level,start_date,end_date,status\n` +
         `Sample Exam,MATH101,Sample math exam,60,50,70,medium,2024-01-01 09:00,2024-01-31 23:59,draft`
-      : `exam_id,exam_title,question_text,question_type,marks,order,correct_answer,latex_content,diagram_image,equation_type,explanation\n` +
-        `1,Sample Exam,Solve for x: $x^2 + 5x + 6 = 0$,math,5,1,x = -2, x = -3,x^2 + 5x + 6 = 0,,algebraic,Factor the quadratic equation\n` +
-        `1,Sample Exam,Balance: H2 + O2 → H2O,chemistry,5,2,2H2 + O2 → 2H2O,,,chemical,Balance the chemical equation\n` +
-        `1,Sample Exam,Calculate force: F = ma,physics,5,3,F = ma,,physics_diagram.png,physics,Newton's second law`
+      : `exam_id,exam_title,question_text,question_type,marks,answer_options,correct_answer,latex_content,diagram_image,equation_type,explanation\n` +
+        `,Sample Exam,What is 2+2?,multiple,5,3|4|5|6,5,,,,"Basic addition problem"\n` +
+        `,Sample Exam,Which gas do plants absorb?,multiple,2,CO2|O2|N2|H2O,CO2,,,,"Photosynthesis basics"\n` +
+        `,Sample Exam,The sky is blue,true_false,2,,true,,,,"Basic observation"\n` +
+        `,Sample Exam,The chemical symbol for water is ____,fill_blank,2,,H2O,,,,"Chemistry basics"\n` +
+        `,Sample Exam,Solve for x: 2x + 4 = 10,math,5,,,2x + 4 = 10,,algebraic,Basic algebra\n` +
+        `,Sample Exam,Balance: H2 + O2 -> H2O,chemistry,5,,,H2 + O2 -> H2O,,chemical,Balance the equation\n` +
+        `,Sample Exam,Identify the plant cell organelle,physics,5,Mitochondria|Chloroplast|Nucleus,Chloroplast,,plant_cell.png,physics,Diagram-based question\n` +
+        `,Sample Exam,Explain gravity,short,10,,,,,,Physics concept explanation`
 
     const blob = new Blob([template], { type: 'text/csv' })
     const url = window.URL.createObjectURL(blob)
