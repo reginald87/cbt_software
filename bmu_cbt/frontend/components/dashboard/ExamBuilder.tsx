@@ -58,6 +58,11 @@ interface Exam {
   start_date: string
   end_date: string
   status: 'draft' | 'published' | 'closed'
+  show_answers: boolean
+  show_score: boolean
+  shuffle_questions: boolean
+  shuffle_options: boolean
+  allow_review: boolean
   questions: Question[]
 }
 
@@ -79,6 +84,11 @@ export default function ExamBuilder({ examId }: ExamBuilderProps) {
     start_date: '',
     end_date: '',
     status: 'draft',
+    show_answers: true,
+    show_score: true,
+    shuffle_questions: true,
+    shuffle_options: true,
+    allow_review: true,
     questions: []
   })
   const [categories, setCategories] = useState([])
@@ -155,6 +165,11 @@ export default function ExamBuilder({ examId }: ExamBuilderProps) {
         ...data,
         category: data.category && typeof data.category === 'object' ? String(data.category.id) : (data.category || ''),
         total_questions: data.questions?.length ?? prev.total_questions,
+        show_answers: data.show_answers ?? true,
+        show_score: data.show_score ?? true,
+        shuffle_questions: data.shuffle_questions ?? true,
+        shuffle_options: data.shuffle_options ?? true,
+        allow_review: data.allow_review ?? true,
         questions: (data.questions || []).map((q: any) => ({
           ...q,
           answers: (q.answers || []).map((a: any) => ({
@@ -349,11 +364,11 @@ export default function ExamBuilder({ examId }: ExamBuilderProps) {
         passing_score: exam.passing_score,
         start_date: exam.start_date,
         end_date: exam.end_date,
-        show_answers: true,
-        show_score: true,
-        shuffle_questions: true,
-        shuffle_options: true,
-        allow_review: true,
+        show_answers: exam.show_answers,
+        show_score: exam.show_score,
+        shuffle_questions: exam.shuffle_questions,
+        shuffle_options: exam.shuffle_options,
+        allow_review: exam.allow_review,
         total_questions: exam.total_questions,
         difficulty_level: exam.difficulty_level,
         status: publish ? 'published' : 'draft'
@@ -899,6 +914,57 @@ export default function ExamBuilder({ examId }: ExamBuilderProps) {
                 onChange={(e) => setExam(prev => ({ ...prev, end_date: e.target.value }))}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg"
               />
+            </div>
+          </div>
+
+          <div>
+            <h4 className="text-sm font-semibold text-gray-700 mb-3">Exam Settings</h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <label className="flex items-center justify-between gap-3 rounded-lg border border-gray-200 p-3 cursor-pointer">
+                <span className="text-sm text-gray-700">Show score after submission</span>
+                <input
+                  type="checkbox"
+                  checked={exam.show_score}
+                  onChange={(e) => setExam(prev => ({ ...prev, show_score: e.target.checked }))}
+                  className="h-4 w-4"
+                />
+              </label>
+              <label className="flex items-center justify-between gap-3 rounded-lg border border-gray-200 p-3 cursor-pointer">
+                <span className="text-sm text-gray-700">Show correct answers after submission</span>
+                <input
+                  type="checkbox"
+                  checked={exam.show_answers}
+                  onChange={(e) => setExam(prev => ({ ...prev, show_answers: e.target.checked }))}
+                  className="h-4 w-4"
+                />
+              </label>
+              <label className="flex items-center justify-between gap-3 rounded-lg border border-gray-200 p-3 cursor-pointer">
+                <span className="text-sm text-gray-700">Allow students to review answers</span>
+                <input
+                  type="checkbox"
+                  checked={exam.allow_review}
+                  onChange={(e) => setExam(prev => ({ ...prev, allow_review: e.target.checked }))}
+                  className="h-4 w-4"
+                />
+              </label>
+              <label className="flex items-center justify-between gap-3 rounded-lg border border-gray-200 p-3 cursor-pointer">
+                <span className="text-sm text-gray-700">Shuffle question order</span>
+                <input
+                  type="checkbox"
+                  checked={exam.shuffle_questions}
+                  onChange={(e) => setExam(prev => ({ ...prev, shuffle_questions: e.target.checked }))}
+                  className="h-4 w-4"
+                />
+              </label>
+              <label className="flex items-center justify-between gap-3 rounded-lg border border-gray-200 p-3 cursor-pointer">
+                <span className="text-sm text-gray-700">Shuffle answer options</span>
+                <input
+                  type="checkbox"
+                  checked={exam.shuffle_options}
+                  onChange={(e) => setExam(prev => ({ ...prev, shuffle_options: e.target.checked }))}
+                  className="h-4 w-4"
+                />
+              </label>
             </div>
           </div>
         </div>

@@ -735,7 +735,9 @@ def update_exam(request, exam_id: int, exam_data: ExamCreateSchema):
         exam.passing_score = exam_data.passing_score
         exam.total_questions = exam_data.total_questions if exam_data.total_questions is not None else exam.total_questions
         exam.shuffle_questions = exam_data.shuffle_questions
+        exam.shuffle_options = exam_data.shuffle_options
         exam.show_answers = exam_data.show_answers
+        exam.show_score = exam_data.show_score
         exam.allow_review = exam_data.allow_review
         if exam_data.category_id:
             exam.category_id = exam_data.category_id

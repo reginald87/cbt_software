@@ -63,8 +63,12 @@ class StudentAnswerSchema(BaseModel):
     id: int
     question_id: int
     selected_answer_id: Optional[int] = None
+    selected_answer_text: Optional[str] = None
+    short_answer: Optional[str] = None
+    boolean_answer: Optional[bool] = None
     is_correct: bool
     marks_obtained: float
+    correct_answer_text: Optional[str] = None
 
 class ExamAttemptListSchema(BaseModel):
     id: int
@@ -831,6 +835,25 @@ def get_all_attempts(request, exam_id: Optional[int] = Query(None)):
         for a in attempts
     ]
 
+def _student_answer_text(sa):
+    """Human-readable text of the student's own answer for review."""
+    if sa.selected_answer:
+        return sa.selected_answer.answer_text
+    if sa.boolean_answer is not None:
+        return 'True' if sa.boolean_answer else 'False'
+    if sa.short_answer:
+        return sa.short_answer
+    return None
+
+
+def _correct_answer_text(question):
+    """Text of the correct answer for review (admin-configured show_answers gate applied by caller)."""
+    correct = question.answers.filter(is_correct=True).first()
+    if correct:
+        return correct.answer_text
+    return question.correct_answer or None
+
+
 @router.get("/{attempt_id}/", response=ExamAttemptDetailSchema)
 def get_attempt_detail(request, attempt_id: int):
     """Get detailed results of an exam attempt"""
@@ -854,8 +877,12 @@ def get_attempt_detail(request, attempt_id: int):
                 'id': sa.id,
                 'question_id': sa.question.id,
                 'selected_answer_id': sa.selected_answer.id if sa.selected_answer else None,
+                'selected_answer_text': _student_answer_text(sa),
+                'short_answer': sa.short_answer,
+                'boolean_answer': sa.boolean_answer,
                 'is_correct': sa.is_correct,
                 'marks_obtained': sa.marks_obtained,
+                'correct_answer_text': _correct_answer_text(sa.question) if attempt.exam.show_answers else None,
             }
             for sa in attempt.answers.all()
         ]

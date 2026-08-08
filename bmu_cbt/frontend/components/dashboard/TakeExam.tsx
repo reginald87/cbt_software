@@ -75,12 +75,43 @@ interface ExamDetail {
   status: string
   start_date: string
   end_date: string
+  show_answers: boolean
+  show_score: boolean
+  shuffle_questions: boolean
+  shuffle_options: boolean
+  allow_review: boolean
   category: {
     id: number
     code: string
     name: string
     description?: string | null
   }
+}
+
+interface AttemptAnswer {
+  id: number
+  question_id: number
+  selected_answer_id?: number | null
+  selected_answer_text?: string | null
+  short_answer?: string | null
+  boolean_answer?: boolean | null
+  is_correct: boolean
+  marks_obtained: number
+  correct_answer_text?: string | null
+}
+
+interface AttemptDetail {
+  id: number
+  exam_id: number
+  exam_title: string
+  status: string
+  total_marks?: number | null
+  percentage?: number | null
+  grade?: string | null
+  is_passed: boolean
+  submitted_at?: string | null
+  time_taken_seconds?: number | null
+  answers: AttemptAnswer[]
 }
 
 interface TakeExamProps {
@@ -120,6 +151,8 @@ export default function TakeExam({ examId, attemptId, endTimeMs, onExit }: TakeE
 
   const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null)
   const endTimeMsRef = useRef<number | null>(null)
+  const [reviewData, setReviewData] = useState<AttemptDetail | null>(null)
+  const submittedRef = useRef(false)
 
   useEffect(() => {
     if (!token) return
@@ -139,12 +172,13 @@ export default function TakeExam({ examId, attemptId, endTimeMs, onExit }: TakeE
     if (!existing) window.localStorage.setItem(key, String(endMs))
 
     const tick = () => {
+      if (submittedRef.current) return
       const endTimeMs = endTimeMsRef.current
       if (!endTimeMs) return
       const left = Math.ceil((endTimeMs - Date.now()) / 1000)
       setRemainingSeconds(left)
       if (left <= 0) {
-        void submitExam(true)
+        void submitExam()
       }
     }
 
@@ -222,7 +256,7 @@ export default function TakeExam({ examId, attemptId, endTimeMs, onExit }: TakeE
     }
   }
 
-  const submitExam = async (isAuto: boolean) => {
+  const submitExam = async () => {
     if (isSubmitting) return
     try {
       setIsSubmitting(true)
@@ -241,13 +275,10 @@ export default function TakeExam({ examId, attemptId, endTimeMs, onExit }: TakeE
 
       const key = `bmu_cbt_attempt_${attemptId}_end_time_ms`
       window.localStorage.removeItem(key)
+      submittedRef.current = true
 
-      if (isAuto) {
-        onExit()
-        return
-      }
-
-      onExit()
+      const detailRes = await api.get(`/results/${attemptId}/`)
+      setReviewData(detailRes.data)
     } catch (e: any) {
       console.error(e)
       setSubmitError(e.response?.data?.detail || 'Failed to submit exam')
@@ -296,6 +327,106 @@ export default function TakeExam({ examId, attemptId, endTimeMs, onExit }: TakeE
         <p className="text-gray-500">{error}</p>
         <div className="mt-4">
           <button className="btn-outline" onClick={fetchExamAndQuestions}>Retry</button>
+        </div>
+      </div>
+    )
+  }
+
+  if (reviewData) {
+    const correctCount = reviewData.answers.filter(a => a.is_correct).length
+    const answersById = new Map(reviewData.answers.map(a => [a.question_id, a]))
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white -m-6">
+        <div className="sticky top-0 z-20 border-b border-slate-200 bg-white/90 backdrop-blur">
+          <div className="px-6 py-4 flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-base sm:text-lg font-bold text-slate-900 truncate">{reviewData.exam_title}</div>
+              <div className="text-xs text-slate-500">Exam completed · Attempt #{attemptId}</div>
+            </div>
+            <button
+              onClick={onExit}
+              className="inline-flex items-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 whitespace-nowrap"
+            >
+              Done
+            </button>
+          </div>
+        </div>
+
+        <div className="px-6 py-6 max-w-3xl mx-auto">
+          {exam.show_score && (
+            <div className={`card mb-6 ${reviewData.is_passed ? 'border-green-200' : 'border-red-200'}`}>
+              <div className="card-content text-center">
+                <div className="text-sm text-gray-500 mb-1">Your Score</div>
+                <div className={`text-5xl font-extrabold ${reviewData.is_passed ? 'text-green-600' : 'text-red-600'}`}>
+                  {reviewData.percentage?.toFixed(1) ?? '--'}%
+                </div>
+                <div className="mt-3 flex items-center justify-center gap-4 text-sm">
+                  <span className={`rounded-full px-3 py-1 font-semibold ${reviewData.is_passed ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                    {reviewData.is_passed ? 'PASSED' : 'FAILED'}
+                  </span>
+                  {reviewData.grade && <span className="text-gray-500">Grade: {reviewData.grade}</span>}
+                </div>
+                <div className="mt-3 text-sm text-gray-500">
+                  {correctCount}/{sortedQuestions.length} questions correct · {reviewData.total_marks} mark(s)
+                </div>
+              </div>
+            </div>
+          )}
+
+          {exam.allow_review && (
+            <div className="space-y-4">
+              <h3 className="text-lg font-bold text-gray-900">Review Answers</h3>
+              {sortedQuestions.map((q, idx) => {
+                const ans = answersById.get(q.id)
+                return (
+                  <div key={q.id} className="card">
+                    <div className="card-content">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="text-sm font-semibold text-gray-900">
+                          <span>{idx + 1}. </span>
+                          <MathQuestionRenderer questionText={q.latex_content || q.question_text} questionType={q.question_type} />
+                        </div>
+                        <span className={`text-xs font-semibold rounded-full px-2 py-1 whitespace-nowrap ${ans?.is_correct ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                          {ans?.is_correct ? 'Correct' : 'Incorrect'}
+                        </span>
+                      </div>
+                      <div className="mt-2 text-sm">
+                        <div className="text-gray-500">Your answer:</div>
+                        <div className="mt-1 text-gray-900">{ans?.selected_answer_text || 'No answer'}</div>
+                        {ans?.correct_answer_text && (
+                          <div className="mt-2 text-green-700">Correct answer: {ans.correct_answer_text}</div>
+                        )}
+                      </div>
+                      <div className="mt-2 text-xs text-gray-400">Marks: {ans?.marks_obtained ?? 0} / {q.marks}</div>
+                    </div>
+                  </div>
+                )
+              })}
+              <div className="pt-4 flex justify-center">
+                <button
+                  onClick={onExit}
+                  className="inline-flex items-center rounded-xl bg-slate-900 px-6 py-3 text-sm font-semibold text-white shadow-sm hover:bg-slate-800"
+                >
+                  Back to Dashboard
+                </button>
+              </div>
+            </div>
+          )}
+
+          {!exam.show_score && !exam.allow_review && (
+            <div className="text-center py-12">
+              <BookOpen className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+              <p className="text-gray-500">Your exam has been submitted.</p>
+              <div className="mt-4">
+                <button
+                  onClick={onExit}
+                  className="inline-flex items-center rounded-xl bg-slate-900 px-6 py-3 text-sm font-semibold text-white shadow-sm hover:bg-slate-800"
+                >
+                  Back to Dashboard
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     )
@@ -382,7 +513,7 @@ export default function TakeExam({ examId, attemptId, endTimeMs, onExit }: TakeE
 
               <button
                 onClick={() => {
-                  if (window.confirm('Submit exam now?')) void submitExam(false)
+                  if (window.confirm('Submit exam now?')) void submitExam()
                 }}
                 className="inline-flex items-center rounded-xl bg-primary-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary-700 disabled:opacity-50"
                 disabled={isSubmitting}
@@ -478,7 +609,6 @@ export default function TakeExam({ examId, attemptId, endTimeMs, onExit }: TakeE
                   <div className="space-y-2">
                     {activeQuestion.answers
                       .slice()
-                      .sort((a, b) => a.order - b.order)
                       .map((a) => {
                         const selected = currentSelected === a.id
                         return (
@@ -634,7 +764,6 @@ export default function TakeExam({ examId, attemptId, endTimeMs, onExit }: TakeE
                       <div className="space-y-2">
                         {activeQuestion.answers
                           .slice()
-                          .sort((a, b) => a.order - b.order)
                           .map((a) => {
                             const selected = currentSelected === a.id
                             return (
@@ -689,7 +818,6 @@ export default function TakeExam({ examId, attemptId, endTimeMs, onExit }: TakeE
                       <div className="space-y-2">
                         {activeQuestion.answers
                           .slice()
-                          .sort((a, b) => a.order - b.order)
                           .map((a) => {
                             const selected = currentSelected === a.id
                             return (
@@ -807,7 +935,7 @@ export default function TakeExam({ examId, attemptId, endTimeMs, onExit }: TakeE
         isActive={!isSubmitting && exam && sortedQuestions.length > 0}
         onViolation={() => {
           toast.error('Tab switching is prohibited. Your exam has been submitted.')
-          void submitExam(true)
+          void submitExam()
         }}
       />
       
