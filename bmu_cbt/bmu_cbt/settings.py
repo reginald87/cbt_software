@@ -194,7 +194,19 @@ USE_TZ = True
 STATIC_URL = 'static/'
 STATICFILES_DIRS = [BASE_DIR / 'static']
 STATIC_ROOT = BASE_DIR / 'staticfiles'
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
+# Whitenoise-served static files. Note: STATICFILES_STORAGE was removed in
+# Django 5.1, so the modern STORAGES mapping is required on Django 6. We use
+# the compressed (non-manifest) backend: jazzmin references a static DIRECTORY
+# (vendor/bootswatch), which the manifest storage can't resolve and would 500.
+STORAGES = {
+    'default': {
+        'BACKEND': 'django.core.files.storage.FileSystemStorage',
+    },
+    'staticfiles': {
+        'BACKEND': 'whitenoise.storage.CompressedStaticFilesStorage',
+    },
+}
 
 # Media files
 MEDIA_URL = '/media/'

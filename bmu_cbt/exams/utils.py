@@ -209,6 +209,55 @@ def _diagram_filename(value):
     return filename
 
 
+def _split_answer_options(value):
+    r"""Split the pipe-delimited `answer_options` column into options.
+
+    Supports backslash escaping so a literal '|' or '\' can appear inside an
+    option (useful for chemistry / math content):
+      'A\|B'  -> ['A|B']    (escaped pipe)
+      'A\\B'  -> ['A\B']    (escaped backslash)
+    A trailing backslash is kept as a literal character.
+    """
+    options = []
+    current = []
+    s = value or ''
+    i = 0
+    while i < len(s):
+        ch = s[i]
+        if ch == '\\' and i + 1 < len(s) and s[i + 1] in ('|', '\\'):
+            current.append(s[i + 1])
+            i += 2
+            continue
+        if ch == '|':
+            options.append(''.join(current).strip())
+            current = []
+            i += 1
+            continue
+        current.append(ch)
+        i += 1
+    options.append(''.join(current).strip())
+    return [o for o in options if o]
+
+
+def _correct_answer_index(options, correct_answer):
+    """Index of the option matching `correct_answer`.
+
+    Exact match wins; otherwise the first case-insensitive match is used so
+    'NaOH' matches 'naoh' (and vice versa). Returns None when there is no match.
+    """
+    correct = (correct_answer or '').strip()
+    if not correct:
+        return None
+    for i, opt in enumerate(options):
+        if opt == correct:
+            return i
+    lower = correct.lower()
+    for i, opt in enumerate(options):
+        if opt.lower() == lower:
+            return i
+    return None
+
+
 def validate_questions_row(row, row_number):
     """Validate a single row from questions CSV"""
     errors = []
@@ -236,19 +285,14 @@ def validate_questions_row(row, row_number):
 
     # For multiple choice, validate answer options + correct answer
     if question_type == 'multiple':
-        answer_options_str = row.get('answer_options', '')
-        answer_options = (
-            [opt.strip() for opt in answer_options_str.split('|') if opt.strip()]
-            if answer_options_str
-            else []
-        )
+        answer_options = _split_answer_options(row.get('answer_options', ''))
 
         if len(answer_options) < 2:
             errors.append(f"Row {row_number}: Multiple choice questions need at least 2 answer options")
 
         if not correct_answer:
             errors.append(f"Row {row_number}: correct_answer is required for multiple choice questions")
-        elif correct_answer not in answer_options:
+        elif _correct_answer_index(answer_options, correct_answer) is None:
             errors.append(f"Row {row_number}: Correct answer must be one of the answer options")
 
     # For true/false, validate correct answer
@@ -282,13 +326,18 @@ def validate_questions_row(row, row_number):
 
 
 def import_questions_from_csv(csv_file, user):
-    """
+    r"""
     Import questions from CSV file
     Expected CSV format:
     exam_id (optional),exam_title,question_text,question_type,marks,answer_options,correct_answer,latex_content,diagram_image,equation_type,explanation
 
     diagram_image: plain filename (e.g. photosynthesis.png) of a file that must
     already exist on the server in media/question_diagrams/.
+
+    answer_options: pipe-delimited options, e.g. '3|4|5|6'. A literal '|' or
+    '\' inside an option can be escaped with a backslash ('\|', '\\').
+    correct_answer must match one of the options (exact match preferred,
+    case-insensitive fallback).
     """
     try:
         # Decode file if it's bytes
@@ -395,15 +444,15 @@ def import_questions_from_csv(csv_file, user):
                 
                 # Create answers for multiple choice questions
                 if question_type == 'multiple':
-                    answer_options_str = row.get('answer_options', '')
-                    answer_options = [opt.strip() for opt in answer_options_str.split('|') if opt.strip()] if answer_options_str else []
+                    answer_options = _split_answer_options(row.get('answer_options', ''))
                     correct_answer = row.get('correct_answer', '').strip()
-                    
+                    correct_idx = _correct_answer_index(answer_options, correct_answer)
+
                     for i, option_text in enumerate(answer_options):
                         answers_to_create.append(Answer(
                             question=question,
                             answer_text=option_text,
-                            is_correct=(option_text == correct_answer),
+                            is_correct=(i == correct_idx),
                             order=i + 1
                         ))
 

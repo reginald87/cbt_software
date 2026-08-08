@@ -8,7 +8,6 @@ class AuditLogAdmin(admin.ModelAdmin):
     list_filter = ('action', 'created_at')
     search_fields = ('username', 'action', 'action_label', 'details')
     readonly_fields = [f.name for f in AuditLog._meta.fields]
-    date_hierarchy = 'created_at'
 
     def has_add_permission(self, request):
         return False

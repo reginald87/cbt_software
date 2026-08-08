@@ -2,6 +2,7 @@ from ninja import Router, Query, File
 from ninja.errors import HttpError
 from ninja.files import UploadedFile
 from django.shortcuts import get_object_or_404
+from django.db.models import Prefetch
 from pydantic import BaseModel
 from typing import List, Optional
 from exams.models import Exam, ExamCategory, Question, Answer
@@ -270,6 +271,14 @@ def get_current_exam(request):
     }
 
 
+def _questions_with_answers(exam):
+    """Load an exam's questions and their (ordered) answers without N+1 queries."""
+    return list(exam.questions.all().order_by('order').prefetch_related(
+        Prefetch('answers', queryset=Answer.objects.order_by('order')),
+        'shared_image',
+    ))
+
+
 @router.get("/{exam_id}/", response=ExamAdminDetailSchema)
 def get_exam_detail(request, exam_id: int):
     """Get detailed exam information including all questions and answers.
@@ -279,6 +288,7 @@ def get_exam_detail(request, exam_id: int):
     """
     exam = get_object_or_404(Exam, id=exam_id)
     is_admin = getattr(request.user, 'is_superuser', False)
+    questions = _questions_with_answers(exam)
     
     # Prepare questions with answers
     exam_dict = {
@@ -319,10 +329,10 @@ def get_exam_detail(request, exam_id: int):
                         'order': a.order,
                         'is_correct': a.is_correct if is_admin else None,
                     }
-                    for a in q.answers.all().order_by('order')
+                    for a in q.answers.all()
                 ]
             }
-            for q in exam.questions.all().order_by('order')
+            for q in questions
         ]
     }
     
@@ -334,6 +344,7 @@ def get_exam_detail(request, exam_id: int):
 def get_exam_admin_detail(request, exam_id: int):
     """Admin-only exam detail including correct answers for review."""
     exam = get_object_or_404(Exam, id=exam_id)
+    questions = _questions_with_answers(exam)
 
     return {
         'id': exam.id,
@@ -373,10 +384,10 @@ def get_exam_admin_detail(request, exam_id: int):
                         'order': a.order,
                         'is_correct': a.is_correct,
                     }
-                    for a in q.answers.all().order_by('order')
+                    for a in q.answers.all()
                 ],
             }
-            for q in exam.questions.all().order_by('order')
+            for q in questions
         ],
     }
 
@@ -384,18 +395,23 @@ def get_exam_admin_detail(request, exam_id: int):
 def get_exam_questions(request, exam_id: int):
     """Get all questions for an exam"""
     exam = get_object_or_404(Exam, id=exam_id)
-    questions = list(exam.questions.all().order_by('order').prefetch_related('answers', 'shared_image'))
+    questions = _questions_with_answers(exam)
     is_admin = getattr(request.user, 'is_superuser', False)
 
-    # Share comprehension passages across questions in the same group
-    passage_cache = {}
+    # Share comprehension passages across questions in the same group.
+    # Batch the lookup: one query for all groups instead of one per group.
+    passages = {}
+    groups = {q.comprehension_group for q in questions if q.comprehension_group}
+    if groups:
+        passage_rows = Question.objects.filter(
+            exam=exam,
+            comprehension_group__in=groups,
+            comprehension_passage__isnull=False,
+        ).order_by('comprehension_group', 'order').only('comprehension_group', 'comprehension_passage')
+        for pq in passage_rows:
+            passages.setdefault(pq.comprehension_group, pq.comprehension_passage)
     for q in questions:
-        if q.comprehension_group:
-            if q.comprehension_group not in passage_cache:
-                passage_cache[q.comprehension_group] = q.get_shared_passage()
-            q._shared_passage = passage_cache[q.comprehension_group]
-        else:
-            q._shared_passage = None
+        q._shared_passage = passages.get(q.comprehension_group) if q.comprehension_group else None
 
     # Shuffle questions and answer options per-student when enabled (admins always see canonical order)
     if not is_admin:
@@ -434,7 +450,7 @@ def get_exam_questions(request, exam_id: int):
                 'image': q.shared_image.image.url if q.shared_image.image else None,
                 'caption': q.shared_image.caption
             } if q.shared_image else None,
-            'answers': [{'id': a.id, 'answer_text': a.answer_text, 'order': a.order} for a in (getattr(q, '_shuffled_answers', None) or list(q.answers.all().order_by('order')))],
+            'answers': [{'id': a.id, 'answer_text': a.answer_text, 'order': a.order} for a in (getattr(q, '_shuffled_answers', None) or q.answers.all())],
         }
         for q in questions
     ]

@@ -1,4 +1,5 @@
-from django.db import models
+from django.db import models, transaction
+from django.db.models import Sum
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.utils import timezone
 from users.models import User
@@ -77,21 +78,23 @@ class ExamAttempt(models.Model):
     
     def calculate_score(self):
         """Calculate the total score for this attempt"""
-        total_marks = sum(q.marks for q in self.exam.questions.all())
-        obtained_marks = 0
-        
-        for answer in self.answers.select_related('question').all():
-            if answer.question and answer.is_correct:
-                obtained_marks += answer.question.marks
-        
-        if total_marks > 0:
-            self.total_marks = obtained_marks
-            self.percentage = round((obtained_marks / total_marks) * 100, 2)
-            self.is_passed = self.percentage >= self.exam.passing_score
-            self.grade = self.get_grade(self.percentage)
-            self.status = 'graded'
-            self.save()
-        
+        with transaction.atomic():
+            total = self.exam.questions.aggregate(total=Sum('marks'))['total'] or 0
+            total_marks = total
+            obtained_marks = 0
+
+            for answer in self.answers.select_related('question').all():
+                if answer.question and answer.is_correct:
+                    obtained_marks += answer.question.marks
+
+            if total_marks > 0:
+                self.total_marks = obtained_marks
+                self.percentage = round((obtained_marks / total_marks) * 100, 2)
+                self.is_passed = self.percentage >= self.exam.passing_score
+                self.grade = self.get_grade(self.percentage)
+                self.status = 'graded'
+                self.save()
+
         return self.total_marks, self.percentage
     
     def get_grade(self, percentage):

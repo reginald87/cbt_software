@@ -1,5 +1,6 @@
 from ninja import Router, Query
 from django.shortcuts import get_object_or_404
+from django.db import transaction
 from django.utils import timezone
 from pydantic import BaseModel
 from typing import List, Optional
@@ -848,7 +849,9 @@ def _student_answer_text(sa):
 
 def _correct_answer_text(question):
     """Text of the correct answer for review (admin-configured show_answers gate applied by caller)."""
-    correct = question.answers.filter(is_correct=True).first()
+    # Iterate the (prefetched) answers instead of filter(), which would bypass
+    # the prefetch cache and trigger one query per question.
+    correct = next((a for a in question.answers.all() if a.is_correct), None)
     if correct:
         return correct.answer_text
     return question.correct_answer or None
@@ -857,8 +860,13 @@ def _correct_answer_text(question):
 @router.get("/{attempt_id}/", response=ExamAttemptDetailSchema)
 def get_attempt_detail(request, attempt_id: int):
     """Get detailed results of an exam attempt"""
-    attempt = get_object_or_404(ExamAttempt, id=attempt_id, student=request.user)
-    
+    attempt = get_object_or_404(
+        ExamAttempt.objects.select_related('exam', 'student'),
+        id=attempt_id,
+        student=request.user,
+    )
+    answers = attempt.answers.select_related('question', 'selected_answer').prefetch_related('question__answers').all()
+
     return {
         'id': attempt.id,
         'exam_id': attempt.exam.id,
@@ -884,14 +892,18 @@ def get_attempt_detail(request, attempt_id: int):
                 'marks_obtained': sa.marks_obtained,
                 'correct_answer_text': _correct_answer_text(sa.question) if attempt.exam.show_answers else None,
             }
-            for sa in attempt.answers.all()
+            for sa in answers
         ]
     }
 
 @router.post("/{attempt_id}/submit-answer/")
 def submit_answer(request, attempt_id: int, payload: SubmitAnswersSchema):
     """Submit an answer for a question in an exam"""
-    attempt = get_object_or_404(ExamAttempt, id=attempt_id, student=request.user)
+    attempt = get_object_or_404(
+        ExamAttempt.objects.select_related('exam'),
+        id=attempt_id,
+        student=request.user,
+    )
     
     # Check if attempt is still in progress
     if attempt.status != 'in_progress':
@@ -901,30 +913,31 @@ def submit_answer(request, attempt_id: int, payload: SubmitAnswersSchema):
     exam_duration = timedelta(minutes=attempt.exam.duration_minutes)
     if timezone.now() > attempt.start_time + exam_duration:
         # Auto-submit the exam
-        attempt.status = 'submitted'
-        attempt.submitted_at = timezone.now()
-        attempt.end_time = attempt.submitted_at
-        attempt.time_taken_seconds = int((attempt.submitted_at - attempt.start_time).total_seconds())
-        attempt.save()
-        total_marks, percentage = attempt.calculate_score()
+        with transaction.atomic():
+            attempt.status = 'submitted'
+            attempt.submitted_at = timezone.now()
+            attempt.end_time = attempt.submitted_at
+            attempt.time_taken_seconds = int((attempt.submitted_at - attempt.start_time).total_seconds())
+            attempt.save()
+            total_marks, percentage = attempt.calculate_score()
         raise HttpError(400, "Exam time has expired. Your exam has been auto-submitted.")
     
     question = get_object_or_404(Question, id=payload.question_id, exam=attempt.exam)
     
-    # Get or create student answer
-    student_answer, created = StudentAnswer.objects.update_or_create(
-        attempt=attempt,
-        question=question,
-        defaults={
-            'selected_answer_id': payload.selected_answer_id,
-            'short_answer': payload.short_answer,
-            'boolean_answer': payload.boolean_answer,
-            'time_spent_seconds': payload.time_spent_seconds,
-        }
-    )
-    
-    # Auto-grade the answer
-    student_answer.grade_answer()
+    # Get or create student answer and auto-grade it atomically
+    with transaction.atomic():
+        student_answer, created = StudentAnswer.objects.update_or_create(
+            attempt=attempt,
+            question=question,
+            defaults={
+                'selected_answer_id': payload.selected_answer_id,
+                'short_answer': payload.short_answer,
+                'boolean_answer': payload.boolean_answer,
+                'time_spent_seconds': payload.time_spent_seconds,
+            }
+        )
+        # Auto-grade the answer
+        student_answer.grade_answer()
     
     return {
         "id": student_answer.id,
@@ -935,50 +948,55 @@ def submit_answer(request, attempt_id: int, payload: SubmitAnswersSchema):
 @router.post("/{attempt_id}/submit/")
 def submit_exam(request, attempt_id: int):
     """Submit the exam and finalize scoring"""
-    attempt = get_object_or_404(ExamAttempt, id=attempt_id, student=request.user)
+    attempt = get_object_or_404(
+        ExamAttempt.objects.select_related('exam'),
+        id=attempt_id,
+        student=request.user,
+    )
     
     if attempt.status != 'in_progress':
         raise HttpError(400, "This exam is not in progress")
     
-    # Check if exam time has expired — allow late submission but record it
-    exam_duration = timedelta(minutes=attempt.exam.duration_minutes)
-    is_late = timezone.now() > attempt.start_time + exam_duration
-    
-    # Set submission time
-    attempt.submitted_at = timezone.now()
-    attempt.end_time = attempt.submitted_at
-    attempt.status = 'submitted'
-    
-    # Calculate time taken
-    time_diff = attempt.submitted_at - attempt.start_time
-    attempt.time_taken_seconds = int(time_diff.total_seconds())
-    
-    attempt.save()
-    
-    # Calculate scores
-    total_marks, percentage = attempt.calculate_score()
-    
-    # Create notification for exam submission
-    from results.utils import notify_exam_submission
-    try:
-        notify_exam_submission(attempt)
-    except Exception as e:
-        print(f"Failed to create notification: {e}")
+    with transaction.atomic():
+        # Check if exam time has expired — allow late submission but record it
+        exam_duration = timedelta(minutes=attempt.exam.duration_minutes)
+        is_late = timezone.now() > attempt.start_time + exam_duration
+        
+        # Set submission time
+        attempt.submitted_at = timezone.now()
+        attempt.end_time = attempt.submitted_at
+        attempt.status = 'submitted'
+        
+        # Calculate time taken
+        time_diff = attempt.submitted_at - attempt.start_time
+        attempt.time_taken_seconds = int(time_diff.total_seconds())
+        
+        attempt.save()
+        
+        # Calculate scores
+        total_marks, percentage = attempt.calculate_score()
+        
+        # Create notification for exam submission
+        from results.utils import notify_exam_submission
+        try:
+            notify_exam_submission(attempt)
+        except Exception as e:
+            print(f"Failed to create notification: {e}")
 
-    record_audit(
-        request,
-        'exam.submit',
-        label=f"User '{request.user.username}' submitted exam '{attempt.exam.title}'",
-        user=request.user,
-        model_name='ExamAttempt',
-        object_id=attempt.id,
-        details={
-            'exam_id': attempt.exam_id,
-            'percentage': percentage,
-            'is_passed': attempt.is_passed,
-            'is_late': is_late,
-        },
-    )
+        record_audit(
+            request,
+            'exam.submit',
+            label=f"User '{request.user.username}' submitted exam '{attempt.exam.title}'",
+            user=request.user,
+            model_name='ExamAttempt',
+            object_id=attempt.id,
+            details={
+                'exam_id': attempt.exam_id,
+                'percentage': percentage,
+                'is_passed': attempt.is_passed,
+                'is_late': is_late,
+            },
+        )
     
     return {
         "id": attempt.id,
