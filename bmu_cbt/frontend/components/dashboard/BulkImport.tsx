@@ -70,7 +70,7 @@ export default function BulkImport() {
 
     } catch (error: any) {
       console.error('Upload error:', error)
-      toast.error(error.response?.data?.message || 'Upload failed')
+      toast.error(error?.message || error?.response?.data?.message || 'Upload failed')
     } finally {
       setIsUploading(false)
     }
@@ -78,8 +78,8 @@ export default function BulkImport() {
 
   const downloadTemplate = () => {
     const template = activeTab === 'exams'
-      ? `exam_title,category_code,description,duration_minutes,total_questions,passing_score,difficulty_level,start_date,end_date,status\n` +
-        `Sample Exam,MATH101,Sample math exam,60,50,70,medium,2024-01-01 09:00,2024-01-31 23:59,draft`
+      ? `title,category_code,category_name,description,instructions,duration_minutes,passing_score,start_date,end_date,status,show_answers,show_score,shuffle_questions,shuffle_options,allow_review\n` +
+        `Sample Exam,MATH,Mathematics,Basic mathematics exam,Read all questions carefully,60,70,2026-02-05 09:00:00,2026-02-05 11:00:00,active,true,true,false,false,true`
       : `exam_id,exam_title,question_text,question_type,marks,answer_options,correct_answer,latex_content,diagram_image,equation_type,explanation\n` +
         `,Sample Exam,Which of the following is a synonym for 'benevolent'?,multiple,2,Kind|Cruel|Angry|Indifferent,Kind,,,,"General English vocabulary"\n` +
         `,Sample Exam,Choose the correctly spelt word.,multiple,2,Occasion|Ocassion|Ocasion|Occassion,Occasion,,,,"English spelling test"\n` +

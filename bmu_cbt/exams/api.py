@@ -877,13 +877,8 @@ def import_exams(request, csv_file: UploadedFile = File(...)):
                 label=f"Bulk imported {result['imported']} exams from CSV",
                 details={'imported': result['imported'], 'errors': len(result.get('errors', []))},
             )
-            return {
-                "message": result['message'],
-                "imported": result['imported'],
-                "errors": result.get('errors', [])
-            }
-        else:
-            raise HttpError(400, result['message'])
+        
+        return result
             
     except Exception as e:
         raise HttpError(400, f"Error processing file: {str(e)}")
@@ -907,13 +902,8 @@ def import_questions(request, csv_file: UploadedFile = File(...)):
                 label=f"Bulk imported {result['imported']} questions from CSV",
                 details={'imported': result['imported'], 'errors': len(result.get('errors', []))},
             )
-            return {
-                "message": result['message'],
-                "imported": result['imported'],
-                "errors": result.get('errors', [])
-            }
-        else:
-            raise HttpError(400, result['message'])
+        
+        return result
             
     except Exception as e:
         raise HttpError(400, f"Error processing file: {str(e)}")

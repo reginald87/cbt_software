@@ -23,6 +23,21 @@ interface ApiError extends Error {
   }
 }
 
+function extractErrorMessage(data: any, fallback: string): string {
+  if (!data) return fallback || 'API request failed'
+  if (typeof data === 'string') return data
+  if (typeof data.detail === 'string') return data.detail
+  if (Array.isArray(data.detail)) {
+    const messages = data.detail.map((d: any) => {
+      const field = Array.isArray(d.loc) ? String(d.loc[d.loc.length - 1]) : 'request'
+      return `${field}: ${d.msg}`
+    })
+    return messages.join('; ') || fallback
+  }
+  if (typeof data.message === 'string') return data.message
+  return fallback || 'API request failed'
+}
+
 // Create a fetch-based API client to avoid axios Node.js module issues
 const api: {
   request<T>(url: string, options?: CustomRequestInit): Promise<ApiResponse<T>>
@@ -54,16 +69,25 @@ const api: {
     
     const token = Cookies.get('access_token')
     const headers = new Headers(options.headers || {})
-    
+
     if (token) {
       headers.set('Authorization', `Bearer ${token}`)
     }
-    
-    if (options.body && typeof options.body === 'object') {
+
+    const body = options.body
+    const isFormData = typeof FormData !== 'undefined' && body instanceof FormData
+    const isBlob = typeof Blob !== 'undefined' && body instanceof Blob
+
+    if (body && typeof body === 'object' && !isFormData && !isBlob) {
       headers.set('Content-Type', 'application/json')
     }
 
     const { params, responseType = 'json', ...fetchOptions } = options
+
+    if (fetchOptions.body && typeof fetchOptions.body === 'object' && !(fetchOptions.body instanceof FormData) && !(fetchOptions.body instanceof Blob)) {
+      fetchOptions.body = JSON.stringify(fetchOptions.body)
+    }
+
     try {
       const response = await fetch(fullUrl, {
         ...fetchOptions,
@@ -131,7 +155,7 @@ const api: {
           }
         }
 
-        const error: ApiError = new Error(data?.detail || data?.message || response.statusText || 'API request failed')
+        const error: ApiError = new Error(extractErrorMessage(data, response.statusText))
         error.response = {
           status: response.status,
           data,
@@ -162,7 +186,7 @@ const api: {
     return this.request(url, {
       ...options,
       method: 'POST',
-      body: data ? JSON.stringify(data) : undefined,
+      body: data ?? undefined,
     })
   },
 
@@ -170,7 +194,7 @@ const api: {
     return this.request(url, {
       ...options,
       method: 'PUT',
-      body: data ? JSON.stringify(data) : undefined,
+      body: data ?? undefined,
     })
   },
 
@@ -178,7 +202,7 @@ const api: {
     return this.request(url, {
       ...options,
       method: 'PATCH',
-      body: data ? JSON.stringify(data) : undefined,
+      body: data ?? undefined,
     })
   },
 
