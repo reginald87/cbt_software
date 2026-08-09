@@ -1,0 +1,4 @@
+exam_id,exam_title,question_text,question_type,marks,answer_options,correct_answer,latex_content,diagram_image,equation_type,explanation
+,"Algebra Sample","Solve for x: $x^2 - 5x + 6 = 0$",multiple,2,"$x = 2$ or $x = 3$|$x = -2$ or $x = -3$|$x = 1$ or $x = 6$|$x = 6$ or $x = -1$","$x = 2$ or $x = 3$","$$x^2 - 5x + 6 = 0$$",,algebraic,"Factorize x^2 - 5x + 6 = (x-2)(x-3), so x = 2 or x = 3"
+,"Chemistry Sample","Which equation correctly represents the combustion of methane?",multiple,2,"CH4 + 2O2 --> CO2 + 2H2O|CH4 + O2 --> CO + H2O|2CH4 + O2 --> 2CO + 2H2O|CH4 + 2O2 --> CO2 + 2H2",CH4 + 2O2 --> CO2 + 2H2O,"CH4 + 2O2 --> CO2 + 2H2O",,chemical,"Methane combustion produces carbon dioxide and water"
+,"Chemistry Sample","What is the chemical formula for water?",multiple,1,"H2O|CO2|O2|H2O2",H2O,H2O,,chemical,"Water is made of two hydrogen atoms and one oxygen atom"

@@ -228,12 +228,52 @@ Git does **not** contain the virtual environment, Node packages, the built front
 | `question_text` | The question | "What is the powerhouse of the cell?" |
 | `question_type` | Type of question | `multiple`, `true_false`, `fill_blank`, `short`, `math`, `chemistry`, `physics`, `biology`, `comprehension` |
 | `marks` | Points | `1` |
-| `answer_options` | Answer choices separated by `\|` (for multiple) | `Nucleus\|Mitochondria\|Ribosome` |
-| `correct_answer` | Correct answer (for fill_blank, exact text) | `Mitochondria` |
-| `latex_content` | LaTeX equation (for math/chemistry) | `$x^2 + 5x + 6 = 0$` |
+| `answer_options` | Answer choices separated by `\|` (for multiple) — options can contain LaTeX formulas | `Nucleus\|Mitochondria\|Ribosome` |
+| `correct_answer` | Correct answer (for fill_blank, exact text). For multiple, must match one option exactly — can contain LaTeX | `Mitochondria` |
+| `latex_content` | LaTeX equation (for math/chemistry) — displayed instead of `question_text` when present | `$x^2 + 5x + 6 = 0$` |
 | `diagram_image` | Image filename (must be in the server's `media/question_diagrams/` folder) | `plant_cell.png` |
 | `equation_type` | Equation type for math/science | `algebraic`, `chemical`, `physics`, `statistical` |
 | `explanation` | Explanation (optional) | "Mitochondria generates ATP" |
+
+**Using LaTeX Formulas (Equations & Chemical Formulas)**
+
+Questions and answer options containing equations or chemical formulas are
+written in **LaTeX** and wrapped in dollar signs so the system renders them as
+proper formulas:
+
+- **Inline math** — wrap in a single `$...$`, e.g. `$x^2 - 5x + 6 = 0$`
+- **Display math** — wrap in double `$$...$$`, e.g. `$$\int_{0}^{1} x^2\,dx$$`
+
+LaTeX works everywhere the system renders text: `question_text`,
+`latex_content`, `answer_options`, and `correct_answer`. Here is a complete
+algebraic multiple-choice question ready for the template (the file
+`bmu_cbt/questions_template_latex_sample.csv` in the repo contains this example
+plus the chemistry ones below — import it to see the formulas render):
+
+```csv
+exam_id,exam_title,question_text,question_type,marks,answer_options,correct_answer,latex_content,diagram_image,equation_type,explanation
+,"Algebra Sample","Solve for x: $x^2 - 5x + 6 = 0$",multiple,2,"$x = 2$ or $x = 3$|$x = -2$ or $x = -3$|$x = 1$ or $x = 6$|$x = 6$ or $x = -1$","$x = 2$ or $x = 3$","$$x^2 - 5x + 6 = 0$$",,algebraic,"Factorize x^2 - 5x + 6 = (x-2)(x-3), so x = 2 or x = 3"
+,"Chemistry Sample","Which equation correctly represents the combustion of methane?",multiple,2,"CH4 + 2O2 --> CO2 + 2H2O|CH4 + O2 --> CO + H2O|2CH4 + O2 --> 2CO + 2H2O|CH4 + 2O2 --> CO2 + 2H2",CH4 + 2O2 --> CO2 + 2H2O,"CH4 + 2O2 --> CO2 + 2H2O",,chemical,"Methane combustion produces carbon dioxide and water"
+,"Chemistry Sample","What is the chemical formula for water?",multiple,1,"H2O|CO2|O2|H2O2",H2O,H2O,,chemical,"Water is made of two hydrogen atoms and one oxygen atom"
+```
+
+For **chemistry** questions, formula subscripts (e.g. the `2` in `H2O` → H₂O)
+and the arrow symbols are added automatically, so enter formulas in plain
+notation as shown above.
+
+**CSV rules that matter when using LaTeX:**
+
+- A formula that contains a **comma** (e.g. `f(x, y)`) must be wrapped in double
+  quotes (`"..."`) so the comma is not read as a column separator.
+- A literal double quote inside a quoted field is written as two quotes (`""`).
+- `answer_options` uses `|` as the separator between options. A literal pipe
+  inside an option (e.g. an absolute value like `$|x|$`) must be escaped as
+  `\|`.
+- Backslashes (e.g. `\frac`, `\rightarrow`) are fine in CSV, but author the file
+  in a plain text editor and save as **UTF-8 CSV** — Excel can silently alter
+  text and quotes.
+- For **chemistry** questions use the plain arrow `-->` for `→` and `<-->` for
+  `⇌` — these are converted to proper arrow symbols when the question is shown.
 
 **Using Images in Bulk Import**
 

@@ -377,6 +377,7 @@ def get_exam_admin_detail(request, exam_id: int):
                 'marks': q.marks,
                 'order': q.order,
                 'explanation': q.explanation,
+                'latex_content': q.latex_content,
                 'answers': [
                     {
                         'id': a.id,

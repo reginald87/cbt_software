@@ -5,6 +5,7 @@ import api from '@/utils/axios'
 import { BookOpen, CheckCircle, Eye, RefreshCcw } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import toast from 'react-hot-toast'
+import MathQuestionRenderer from './MathQuestionRenderer'
 
 interface ExamListItem {
   id: number
@@ -37,6 +38,7 @@ interface AdminQuestion {
   marks: number
   order: number
   explanation?: string | null
+  latex_content?: string | null
   answers: AdminAnswer[]
 }
 
@@ -259,7 +261,7 @@ export default function AdminExamReview() {
                       <div key={q.id} className="border border-gray-200 rounded-lg p-4">
                         <div className="flex items-start justify-between">
                           <div className="font-medium text-gray-900">
-                            {q.order}. {q.question_text}
+                            {q.order}. <MathQuestionRenderer questionText={q.latex_content || q.question_text} questionType={q.question_type} />
                           </div>
                           <div className="text-xs text-gray-500">{q.question_type} · {q.marks} marks</div>
                         </div>
@@ -274,7 +276,7 @@ export default function AdminExamReview() {
                               >
                                 <span className="mr-2 text-gray-500">{a.order}.</span>
                                 <span className={a.is_correct ? 'font-medium text-green-800' : 'text-gray-800'}>
-                                  {a.answer_text}
+                                  <MathQuestionRenderer questionText={a.answer_text} questionType={q.question_type} />
                                 </span>
                               </div>
                             ))}

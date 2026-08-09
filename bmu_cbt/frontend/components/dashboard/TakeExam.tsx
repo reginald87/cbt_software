@@ -436,9 +436,13 @@ export default function TakeExam({ examId, attemptId, endTimeMs, onExit }: TakeE
                       </div>
                       <div className="mt-2 text-sm">
                         <div className="text-gray-500">Your answer:</div>
-                        <div className="mt-1 text-gray-900">{ans?.selected_answer_text || 'No answer'}</div>
+                        <div className="mt-1 text-gray-900">
+                          {ans?.selected_answer_text
+                            ? <MathQuestionRenderer questionText={ans.selected_answer_text} questionType={q.question_type} />
+                            : 'No answer'}
+                        </div>
                         {ans?.correct_answer_text && (
-                          <div className="mt-2 text-green-700">Correct answer: {ans.correct_answer_text}</div>
+                          <div className="mt-2 text-green-700">Correct answer: <MathQuestionRenderer questionText={ans.correct_answer_text} questionType={q.question_type} /></div>
                         )}
                       </div>
                       <div className="mt-2 text-xs text-gray-400">Marks: {ans?.marks_obtained ?? 0} / {q.marks}</div>
@@ -671,7 +675,7 @@ export default function TakeExam({ examId, attemptId, endTimeMs, onExit }: TakeE
                                 <div className={`mt-0.5 h-5 w-5 rounded-full border flex items-center justify-center ${selected ? 'border-primary-600 bg-primary-600' : 'border-gray-300 bg-white'}`}>
                                   <div className={`h-2 w-2 rounded-full ${selected ? 'bg-white' : 'bg-transparent'}`} />
                                 </div>
-                                <div className="text-sm text-gray-900">{a.answer_text}</div>
+                                <div className="text-sm text-gray-900"><MathQuestionRenderer questionText={a.answer_text} questionType={activeQuestion.question_type} /></div>
                               </div>
                               <div className="text-xs text-gray-400">Option {a.order}</div>
                             </div>
@@ -828,7 +832,7 @@ export default function TakeExam({ examId, attemptId, endTimeMs, onExit }: TakeE
                                     }`}>
                                       <div className={`h-2 w-2 rounded-full ${selected ? 'bg-white' : 'bg-transparent'}`} />
                                     </div>
-                                    <div className="text-sm text-gray-900">{a.answer_text}</div>
+                                    <div className="text-sm text-gray-900"><MathQuestionRenderer questionText={a.answer_text} questionType={activeQuestion.question_type} /></div>
                                   </div>
                                   <div className="text-xs text-gray-400">Option {a.order}</div>
                                 </div>
@@ -882,7 +886,7 @@ export default function TakeExam({ examId, attemptId, endTimeMs, onExit }: TakeE
                                     }`}>
                                       <div className={`h-2 w-2 rounded-full ${selected ? 'bg-white' : 'bg-transparent'}`} />
                                     </div>
-                                    <div className="text-sm text-gray-900">{a.answer_text}</div>
+                                    <div className="text-sm text-gray-900"><MathQuestionRenderer questionText={a.answer_text} questionType={activeQuestion.question_type} /></div>
                                   </div>
                                   <div className="text-xs text-gray-400">Option {a.order}</div>
                                 </div>

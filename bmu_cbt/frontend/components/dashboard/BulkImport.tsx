@@ -86,6 +86,7 @@ export default function BulkImport() {
         `,Sample Exam,The word 'their' is a possessive pronoun.,true_false,1,,true,,,,"English grammar"\n` +
         `,Sample Exam,A person who writes books is called a(n) ____.,fill_blank,2,,author,,,,"English vocabulary"\n` +
         `,Sample Exam,Solve for x: 2x + 4 = 10,math,5,,,2x + 4 = 10,,algebraic,Basic algebra\n` +
+        `,Sample Exam,Solve for x: $x^2 - 5x + 6 = 0$,multiple,2,"$x = 2$ or $x = 3$|$x = -2$ or $x = -3$|$x = 1$ or $x = 6$|$x = 6$ or $x = -1$","$x = 2$ or $x = 3$","$$x^2 - 5x + 6 = 0$$",,algebraic,Factorize to (x-2)(x-3) = 0\n` +
         `,Sample Exam,Balance: H2 + O2 -> H2O,chemistry,5,,,H2 + O2 -> H2O,,chemical,Balance the equation\n` +
         `,Sample Exam,Which device is used to measure electric current?,multiple,2,Ammeter|Voltmeter|Barometer|Thermometer,Ammeter,,,,"Physics: electricity"\n` +
         `,Sample Exam,Study the circuit diagram and explain what happens to the bulb when the switch is closed.,physics,3,,,,circuit_diagram.png,physics,Diagram question - file must already exist in media/question_diagrams/`
@@ -162,7 +163,8 @@ export default function BulkImport() {
                 {activeTab === 'questions' && (
                   <>
                     <li>• For math questions: Use LaTeX format (e.g., $x^2 + 5x + 6 = 0$)</li>
-                    <li>• For chemistry: Use chemical notation (e.g., 2H2 + O2 → 2H2O)</li>
+                    <li>• LaTeX also works inside answer options and the correct answer (e.g., $x = 2$ or $x = 3$)</li>
+                    <li>• For chemistry: Use chemical notation (e.g., 2H2 + O2 --{'>'} 2H2O)</li>
                     <li>• For images: save the image file (jpg, png, webp, etc.) in the server's <strong>media/question_diagrams/</strong> folder, then put just the filename (e.g. <code>plant_cell.png</code>) in the <code>diagram_image</code> column</li>
                     <li>• Supported question types: multiple, true_false, fill_blank, short, math, chemistry, physics, biology, comprehension</li>
                   </>
