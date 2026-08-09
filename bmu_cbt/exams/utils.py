@@ -3,13 +3,64 @@ Bulk import utilities for exams
 """
 import csv
 import io
-from datetime import datetime
+from datetime import datetime, time
 from django.db import transaction
 from django.db.models import Count
-from django.utils.dateparse import parse_datetime
+from django.utils.dateparse import parse_datetime, parse_date
 from django.conf import settings
 from exams.models import Exam, ExamCategory, Question, Answer
 from users.models import User
+
+
+def _decode_csv_bytes(raw):
+    """Decode uploaded CSV bytes to text, tolerating Excel's encodings.
+
+    Tries UTF-8 (with BOM) first, then Windows-1252 (Excel's default 'ANSI'
+    encoding on Windows), falling back to Latin-1 which never fails.
+    """
+    if isinstance(raw, str):
+        return raw
+    for encoding in ('utf-8-sig', 'cp1252', 'latin-1'):
+        try:
+            return raw.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+    return raw.decode('latin-1')
+
+
+def _parse_datetime_value(value):
+    """Parse a CSV date/datetime value into a datetime, or None if empty/unparseable.
+
+    Accepts ISO-8601 datetimes ('2026-02-05 09:00:00' or '2026-02-05T09:00:00'),
+    date-only values ('2026-02-05', interpreted as midnight), and common US
+    Excel formats ('2/5/2026', '2/5/2026 9:00', '02/05/2026 09:00:00',
+    '2/5/2026 9:00:00 PM'). Never raises - unparseable input returns None so
+    callers can report a friendly error instead of the raw DB constraint message.
+    """
+    raw = (value or '').strip()
+    if not raw:
+        return None
+    try:
+        dt = parse_datetime(raw)
+        if dt is not None:
+            return dt
+        d = parse_date(raw)
+        if d is not None:
+            return datetime.combine(d, time.min)
+        for fmt in (
+            '%m/%d/%Y %I:%M:%S %p',
+            '%m/%d/%Y %I:%M %p',
+            '%m/%d/%Y %H:%M:%S',
+            '%m/%d/%Y %H:%M',
+            '%m/%d/%Y',
+        ):
+            try:
+                return datetime.strptime(raw, fmt)
+            except ValueError:
+                continue
+        return None
+    except (ValueError, TypeError):
+        return None
 
 
 def _bulk_create_batches(model, objects, batch_size=None):
@@ -46,13 +97,16 @@ def validate_exam_row(row, row_number):
         errors.append(f"Row {row_number}: Invalid passing score format")
     
     # Validate dates
-    try:
-        start_date = parse_datetime(row.get('start_date', ''))
-        end_date = parse_datetime(row.get('end_date', ''))
-        if start_date and end_date and start_date >= end_date:
-            errors.append(f"Row {row_number}: End date must be after start date")
-    except ValueError:
-        errors.append(f"Row {row_number}: Invalid date format. Use YYYY-MM-DD HH:MM:SS")
+    start_raw = row.get('start_date', '').strip()
+    end_raw = row.get('end_date', '').strip()
+    start_date = _parse_datetime_value(start_raw)
+    end_date = _parse_datetime_value(end_raw)
+    if start_raw and start_date is None:
+        errors.append(f"Row {row_number}: Invalid start_date format. Use YYYY-MM-DD HH:MM:SS, YYYY-MM-DD, or MM/DD/YYYY")
+    if end_raw and end_date is None:
+        errors.append(f"Row {row_number}: Invalid end_date format. Use YYYY-MM-DD HH:MM:SS, YYYY-MM-DD, or MM/DD/YYYY")
+    if start_date and end_date and start_date >= end_date:
+        errors.append(f"Row {row_number}: End date must be after start date")
     
     return errors
 
@@ -66,7 +120,7 @@ def import_exams_from_csv(csv_file, user):
     try:
         # Decode file if it's bytes
         if isinstance(csv_file, bytes):
-            csv_file = csv_file.decode('utf-8')
+            csv_file = _decode_csv_bytes(csv_file)
         
         # Create file-like object from string
         csv_io = io.StringIO(csv_file)
@@ -109,8 +163,14 @@ def import_exams_from_csv(csv_file, user):
                     categories[category_code] = category
                 
                 # Parse dates
-                start_date = parse_datetime(row.get('start_date', ''))
-                end_date = parse_datetime(row.get('end_date', ''))
+                start_date = _parse_datetime_value(row.get('start_date', ''))
+                end_date = _parse_datetime_value(row.get('end_date', ''))
+                
+                # Should not happen after validate_exam_row, but never let a
+                # None date reach the DB (start_date/end_date are NOT NULL).
+                if start_date is None or end_date is None:
+                    errors.append(f"Row {row_number}: Invalid start_date/end_date format. Use YYYY-MM-DD HH:MM:SS, YYYY-MM-DD, or MM/DD/YYYY")
+                    continue
                 
                 # Create exam (saved in bulk at the end)
                 exam = Exam(
@@ -342,7 +402,7 @@ def import_questions_from_csv(csv_file, user):
     try:
         # Decode file if it's bytes
         if isinstance(csv_file, bytes):
-            csv_file = csv_file.decode('utf-8')
+            csv_file = _decode_csv_bytes(csv_file)
         
         # Create file-like object from string
         csv_io = io.StringIO(csv_file)

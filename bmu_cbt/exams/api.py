@@ -6,7 +6,7 @@ from django.db.models import Prefetch
 from pydantic import BaseModel
 from typing import List, Optional
 from exams.models import Exam, ExamCategory, Question, Answer
-from exams.utils import import_exams_from_csv, import_questions_from_csv, generate_exam_template, generate_questions_template
+from exams.utils import import_exams_from_csv, import_questions_from_csv, generate_exam_template, generate_questions_template, _decode_csv_bytes
 from utils.decorators import admin_required_ninja
 from bmu_cbt.ninja_auth import JWTAuth
 from audit.logger import record_audit
@@ -865,7 +865,7 @@ def import_exams(request, csv_file: UploadedFile = File(...)):
     """Import exams from CSV file (admin only)"""
     try:
         # Read file content
-        csv_content = csv_file.read().decode('utf-8')
+        csv_content = _decode_csv_bytes(csv_file.read())
         
         # Import exams
         result = import_exams_from_csv(csv_content, request.user)
@@ -890,7 +890,7 @@ def import_questions(request, csv_file: UploadedFile = File(...)):
     """Import questions from CSV file (admin only)"""
     try:
         # Read file content
-        csv_content = csv_file.read().decode('utf-8')
+        csv_content = _decode_csv_bytes(csv_file.read())
         
         # Import questions
         result = import_questions_from_csv(csv_content, request.user)
