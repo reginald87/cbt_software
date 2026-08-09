@@ -29,6 +29,32 @@ export default function MathQuestionRenderer({ questionText, showMath = true, qu
   )
 }
 
+// QuestionBody: renders the question prompt (question_text) and, when present,
+// the LaTeX/chemical content (latex_content) beneath it. Fixes the "prompt lost
+// when an equation exists" behavior of `latex_content || question_text`.
+interface QuestionBodyProps {
+  questionText: string
+  latexContent?: string
+  questionType?: string
+}
+
+export function QuestionBody({ questionText, latexContent, questionType = 'multiple' }: QuestionBodyProps) {
+  const hasLatex = !!latexContent && latexContent.trim().length > 0
+  if (!hasLatex) {
+    return <MathQuestionRenderer questionText={questionText} questionType={questionType} />
+  }
+  return (
+    <div className="question-body">
+      {questionText && questionText.trim().length > 0 && (
+        <MathQuestionRenderer questionText={questionText} questionType={questionType} />
+      )}
+      <div className="question-latex-content">
+        <MathQuestionRenderer questionText={latexContent} questionType={questionType} />
+      </div>
+    </div>
+  )
+}
+
 // Math Input Component for student answers
 interface MathInputProps {
   value: string

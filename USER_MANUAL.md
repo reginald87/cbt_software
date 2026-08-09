@@ -253,13 +253,27 @@ plus the chemistry ones below — import it to see the formulas render):
 ```csv
 exam_id,exam_title,question_text,question_type,marks,answer_options,correct_answer,latex_content,diagram_image,equation_type,explanation
 ,"Algebra Sample","Solve for x: $x^2 - 5x + 6 = 0$",multiple,2,"$x = 2$ or $x = 3$|$x = -2$ or $x = -3$|$x = 1$ or $x = 6$|$x = 6$ or $x = -1$","$x = 2$ or $x = 3$","$$x^2 - 5x + 6 = 0$$",,algebraic,"Factorize x^2 - 5x + 6 = (x-2)(x-3), so x = 2 or x = 3"
-,"Chemistry Sample","Which equation correctly represents the combustion of methane?",multiple,2,"CH4 + 2O2 --> CO2 + 2H2O|CH4 + O2 --> CO + H2O|2CH4 + O2 --> 2CO + 2H2O|CH4 + 2O2 --> CO2 + 2H2",CH4 + 2O2 --> CO2 + 2H2O,"CH4 + 2O2 --> CO2 + 2H2O",,chemical,"Methane combustion produces carbon dioxide and water"
-,"Chemistry Sample","What is the chemical formula for water?",multiple,1,"H2O|CO2|O2|H2O2",H2O,H2O,,chemical,"Water is made of two hydrogen atoms and one oxygen atom"
+,"Chemistry Sample","Which equation correctly represents the combustion of methane?",multiple,2,"$CH_4 + 2O_2 \rightarrow CO_2 + 2H_2O$|$CH_4 + O_2 \rightarrow CO + H_2O$|$2CH_4 + O_2 \rightarrow 2CO + 2H_2O$|$CH_4 + 2O_2 \rightarrow CO_2 + 2H_2$","$CH_4 + 2O_2 \rightarrow CO_2 + 2H_2O$","$$CH_4 + 2O_2 \rightarrow CO_2 + 2H_2O$$",,chemical,"Methane combustion produces carbon dioxide and water"
+,"Chemistry Sample","What is the chemical formula for water?",multiple,1,"$H_2O$|$CO_2$|$O_2$|$H_2O_2$","$H_2O$","$$H_2O$$",,chemical,"Water is made of two hydrogen atoms and one oxygen atom"
 ```
 
-For **chemistry** questions, formula subscripts (e.g. the `2` in `H2O` → H₂O)
-and the arrow symbols are added automatically, so enter formulas in plain
-notation as shown above.
+For **formulas inside answer options** (or anywhere a math/science MCQ is rendered) you
+must write the formula as LaTeX wrapped in `$...$` — subscripts, superscripts and
+arrows are not added automatically in that mode (e.g. `$H_2O$`, `$CH_4 + 2O_2
+\rightarrow CO_2 + 2H_2O$`).
+
+**Question prompt vs. equation (important):** put the plain-English prompt in
+`question_text` (e.g. `Solve for $x$ in the equation below.`) and the equation in
+`latex_content` (e.g. `$$x^2 - 5x + 6 = 0$$`). The system now shows BOTH — the
+prompt on top and the rendered equation beneath it. Do not paste the same
+equation into `question_text` as well, or it will appear twice. If a question
+has no separate equation, just fill `question_text` and leave `latex_content`
+empty.
+
+For **chemistry questions** (the `chemistry` question type, where the student
+types an answer) enter plain notation and the system formats it for you —
+subscripts (e.g. the `2` in `H2O` → H₂O) and arrow symbols are added
+automatically (use `-->` for `→` and `<-->` for `⇌`).
 
 **CSV rules that matter when using LaTeX:**
 
@@ -272,8 +286,9 @@ notation as shown above.
 - Backslashes (e.g. `\frac`, `\rightarrow`) are fine in CSV, but author the file
   in a plain text editor and save as **UTF-8 CSV** — Excel can silently alter
   text and quotes.
-- For **chemistry** questions use the plain arrow `-->` for `→` and `<-->` for
-  `⇌` — these are converted to proper arrow symbols when the question is shown.
+- For **chemistry questions** (the `chemistry` type) use the plain arrow `-->`
+  for `→` and `<-->` for `⇌` — these are converted to proper arrow symbols when
+  the question is shown.
 
 **Using Images in Bulk Import**
 

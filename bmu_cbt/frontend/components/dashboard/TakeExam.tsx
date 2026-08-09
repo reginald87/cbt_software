@@ -9,7 +9,7 @@ import TabSwitchDetector from './TabSwitchDetector'
 import ScreenRecorder from './ScreenRecorder'
 import WebcamMonitor from './WebcamMonitor'
 import SessionSecurity from './SessionSecurity'
-import MathQuestionRenderer, { MathInput, ChemInput } from './MathQuestionRenderer'
+import MathQuestionRenderer, { QuestionBody, MathInput, ChemInput } from './MathQuestionRenderer'
 import KaTeXRenderer from './KaTeXRenderer'
 import Image from 'next/image'
 
@@ -428,7 +428,7 @@ export default function TakeExam({ examId, attemptId, endTimeMs, onExit }: TakeE
                       <div className="flex items-start justify-between gap-3">
                         <div className="text-sm font-semibold text-gray-900">
                           <span>{idx + 1}. </span>
-                          <MathQuestionRenderer questionText={q.latex_content || q.question_text} questionType={q.question_type} />
+                          <QuestionBody questionText={q.question_text} latexContent={q.latex_content} questionType={q.question_type} />
                         </div>
                         <span className={`text-xs font-semibold rounded-full px-2 py-1 whitespace-nowrap ${ans?.is_correct ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                           {ans?.is_correct ? 'Correct' : 'Incorrect'}
@@ -615,9 +615,10 @@ export default function TakeExam({ examId, attemptId, endTimeMs, onExit }: TakeE
                     
                     {/* Question Text with Math/Science Support */}
                     <div className="mt-2 text-base font-semibold text-gray-900">
-                      <MathQuestionRenderer 
-                        questionText={activeQuestion.latex_content || activeQuestion.question_text} 
-                        questionType={activeQuestion.question_type} 
+                      <QuestionBody
+                        questionText={activeQuestion.question_text}
+                        latexContent={activeQuestion.latex_content}
+                        questionType={activeQuestion.question_type}
                       />
                     </div>
                     

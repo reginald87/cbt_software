@@ -85,14 +85,29 @@ export default function MathJaxRenderer({ content, display = false, className = 
 
 // Helper function to process mixed content (text + LaTeX)
 export function processMixedContent(content: string): string {
+  // Match math spans in one pass so display math ($$...$$) is consumed before
+  // the inline regex can match inside it. Delimiters are preserved so MathJax
+  // can typeset them.
   return content
-    // Handle display math: $$...$$ or \[...\]
-    .replace(/\$\$([^$]+)\$\$/g, '<div class="math-display">$$$1$$</div>')
-    .replace(/\\\[([^\\\]]+)\\\]/g, '<div class="math-display">\\[$1\\]</div>')
-    // Handle inline math: $...$ or \(...\)
-    .replace(/\$([^$]+)\$/g, '<span class="math-inline">$1</span>')
-    .replace(/\\\(([^\\\)]+)\\\)/g, '<span class="math-inline">\\($1\\)</span>')
-    // Handle chemical equations
+    .replace(
+      /(\$\$[^$]+\$\$|\\\[[^\\\]]+\\\]|\$[^$]+\$|\\\([^\\\)]+\\\))/g,
+      (match: string) => {
+        if (match.startsWith('$$') && match.endsWith('$$')) {
+          return `<div class="math-display">${match}</div>`
+        }
+        if (match.startsWith('\\[') && match.endsWith('\\]')) {
+          return `<div class="math-display">${match}</div>`
+        }
+        if (match.startsWith('$') && match.endsWith('$')) {
+          return `<span class="math-inline">${match}</span>`
+        }
+        if (match.startsWith('\\(') && match.endsWith('\\)')) {
+          return `<span class="math-inline">${match}</span>`
+        }
+        return match
+      }
+    )
+    // Handle chemical equation arrows
     .replace(/---/g, '→')
     .replace(/<->/g, '⇌')
     .replace(/=>/g, '⇒')
