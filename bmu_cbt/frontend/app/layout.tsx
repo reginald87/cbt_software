@@ -3,6 +3,7 @@ import localFont from 'next/font/local'
 import { Toaster } from 'react-hot-toast'
 import { AuthProvider } from '@/contexts/AuthContext'
 import ErrorBoundary from '@/components/dashboard/ErrorBoundary'
+import Polyfills from '@/components/dashboard/Polyfills'
 
 const inter = localFont({
   src: '../public/fonts/Inter-Variable.woff2',
@@ -27,6 +28,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={inter.className}>
+        <Polyfills />
         <ErrorBoundary>
           <AuthProvider>
             <div className="min-h-screen bg-gray-50">
