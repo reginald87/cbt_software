@@ -423,24 +423,49 @@ export default function BatchesManager({ examId }: BatchesManagerProps) {
                   {batch.students.length === 0 ? (
                     <p className="text-sm text-gray-400">No students assigned to this batch.</p>
                   ) : (
-                    <div className="flex flex-wrap gap-2">
-                      {batch.students.map((s) => (
-                        <span
-                          key={s.id}
-                          className="inline-flex items-center gap-2 px-3 py-1.5 text-sm bg-gray-100 border border-gray-200 rounded-full"
-                        >
-                          {s.full_name}
-                          <span className="text-xs text-gray-500">({s.identifier || s.username})</span>
-                          <button
-                            onClick={() => handleRemoveStudent(batch.id, s.id)}
-                            disabled={busyId === batch.id}
-                            className="text-gray-400 hover:text-red-500 disabled:opacity-50"
-                            title="Remove from batch"
-                          >
-                            <UserMinus className="w-3.5 h-3.5" />
-                          </button>
-                        </span>
-                      ))}
+                    <div className="border border-gray-200 rounded-lg overflow-hidden">
+                      <table className="w-full text-sm">
+                        <thead className="bg-gray-50 border-b border-gray-200">
+                          <tr>
+                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              #
+                            </th>
+                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Student Name
+                            </th>
+                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Identifier
+                            </th>
+                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Username
+                            </th>
+                            <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Action
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-100">
+                          {batch.students.map((s, index) => (
+                            <tr key={s.id} className="hover:bg-gray-50 transition-colors">
+                              <td className="px-4 py-2 text-gray-400">{index + 1}</td>
+                              <td className="px-4 py-2 font-medium text-gray-900">{s.full_name}</td>
+                              <td className="px-4 py-2 text-gray-600">{s.identifier || 'N/A'}</td>
+                              <td className="px-4 py-2 text-gray-500">{s.username}</td>
+                              <td className="px-4 py-2 text-right">
+                                <button
+                                  onClick={() => handleRemoveStudent(batch.id, s.id)}
+                                  disabled={busyId === batch.id}
+                                  className="inline-flex items-center gap-1 text-xs font-medium text-red-500 hover:text-red-700 hover:bg-red-50 rounded px-2 py-1 disabled:opacity-50"
+                                  title="Remove from batch"
+                                >
+                                  <UserMinus className="w-3.5 h-3.5" />
+                                  Remove
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
                   )}
                 </div>
