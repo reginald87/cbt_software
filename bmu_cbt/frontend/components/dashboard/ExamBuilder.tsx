@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import api from '@/utils/axios'
-import BatchesManager from './BatchesManager'
 import { 
   Plus, 
   Trash2, 
@@ -97,7 +96,7 @@ export default function ExamBuilder({ examId }: ExamBuilderProps) {
   const [categories, setCategories] = useState([])
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [activeTab, setActiveTab] = useState<'details' | 'questions' | 'batches'>('details')
+  const [activeTab, setActiveTab] = useState<'details' | 'questions'>('details')
   const [showCategoryForm, setShowCategoryForm] = useState(false)
   const [newCategoryName, setNewCategoryName] = useState('')
   const [newCategoryCode, setNewCategoryCode] = useState('')
@@ -746,18 +745,6 @@ export default function ExamBuilder({ examId }: ExamBuilderProps) {
           >
             Questions ({exam.questions.length})
           </button>
-          {exam.id && (
-            <button
-              onClick={() => setActiveTab('batches')}
-              className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors ${
-                activeTab === 'batches'
-                  ? 'border-primary-500 text-primary-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              Batches
-            </button>
-          )}
         </nav>
       </div>
 
@@ -880,7 +867,7 @@ export default function ExamBuilder({ examId }: ExamBuilderProps) {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Questions per Paper <span className="text-gray-400">(for batches)</span>
+                Questions per Student <span className="text-gray-400">(random subset)</span>
               </label>
               <input
                 type="number"
@@ -1007,8 +994,6 @@ export default function ExamBuilder({ examId }: ExamBuilderProps) {
             </div>
           </div>
         </div>
-      ) : activeTab === 'batches' && exam.id ? (
-        <BatchesManager examId={exam.id} />
       ) : (
         <div className="space-y-6">
           {/* Add Question Buttons (sticky so they stay visible while adding many questions) */}

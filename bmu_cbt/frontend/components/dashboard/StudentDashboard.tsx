@@ -23,14 +23,7 @@ interface ExamInfo {
   }
   instructions?: string
   status: string
-  has_batches?: boolean
   questions_per_paper?: number
-  batch?: {
-    id: number
-    name: string
-    start_time: string
-    end_time: string
-  } | null
 }
 
 interface StudentSession {
@@ -210,17 +203,6 @@ export default function StudentDashboard() {
     const offset = serverTimeOffsetRef.current
     const now = new Date(Date.now() + offset)
 
-    // Batched exams use the student's batch window; unassigned students
-    // are blocked until they are assigned.
-    if (exam.has_batches) {
-      if (!exam.batch) return 'unassigned'
-      const batchStart = new Date(exam.batch.start_time)
-      const batchEnd = new Date(exam.batch.end_time)
-      if (now < batchStart) return 'upcoming'
-      if (now > batchEnd) return 'expired'
-      return 'available'
-    }
-
     const startDate = new Date(exam.start_date)
     const endDate = new Date(exam.end_date)
 
@@ -240,7 +222,6 @@ export default function StudentDashboard() {
       case 'upcoming': return 'text-yellow-600 bg-yellow-50 border-yellow-200'
       case 'available': return 'text-green-600 bg-green-50 border-green-200'
       case 'expired': return 'text-red-600 bg-red-50 border-red-200'
-      case 'unassigned': return 'text-gray-500 bg-gray-50 border-gray-200'
       default: return 'text-gray-600 bg-gray-50 border-gray-200'
     }
   }
@@ -259,7 +240,6 @@ export default function StudentDashboard() {
   const availableExams = exams.filter(isExamCurrentlyAvailable)
   const upcomingExams = exams.filter(exam => getExamStatus(exam) === 'upcoming')
   const expiredExams = exams.filter(exam => getExamStatus(exam) === 'expired')
-  const unassignedExams = exams.filter(exam => getExamStatus(exam) === 'unassigned')
 
   return (
     <div className="space-y-6">
@@ -331,7 +311,7 @@ export default function StudentDashboard() {
         <h3 className="text-xl font-semibold text-gray-900 mb-4">Available Exams</h3>
         
         {/* No exams available */}
-        {availableExams.length === 0 && upcomingExams.length === 0 && expiredExams.length === 0 && unassignedExams.length === 0 && (
+        {availableExams.length === 0 && upcomingExams.length === 0 && expiredExams.length === 0 && (
           <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
             <BookOpen className="h-12 w-12 text-gray-400 mx-auto mb-4" />
             <h4 className="text-lg font-medium text-gray-900 mb-2">No Exams Available</h4>
@@ -370,20 +350,6 @@ export default function StudentDashboard() {
                         <span className="text-gray-600">Passing Score:</span>
                         <span className="font-medium">{exam.passing_score}%</span>
                       </div>
-                      {exam.batch && (
-                        <>
-                          <div className="flex justify-between">
-                            <span className="text-gray-600">Your Batch:</span>
-                            <span className="font-medium">{exam.batch.name}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-gray-600">Window:</span>
-                            <span className="font-medium text-xs text-right">
-                              {new Date(exam.batch.start_time).toLocaleString()} – {new Date(exam.batch.end_time).toLocaleTimeString()}
-                            </span>
-                          </div>
-                        </>
-                      )}
                     </div>
 
                     <div className={`px-3 py-1 rounded-full text-xs font-medium border ${
@@ -439,7 +405,7 @@ export default function StudentDashboard() {
                     <div className="space-y-2 text-sm">
                       <div className="flex justify-between">
                         <span className="text-gray-600">Starts:</span>
-                        <span className="font-medium">{new Date(exam.batch?.start_time || exam.start_date).toLocaleString()}</span>
+                        <span className="font-medium">{new Date(exam.start_date).toLocaleString()}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-gray-600">Duration:</span>
@@ -490,7 +456,7 @@ export default function StudentDashboard() {
                     <div className="space-y-2 text-sm">
                       <div className="flex justify-between">
                         <span className="text-gray-600">Ended:</span>
-                        <span className="font-medium">{new Date(exam.batch?.end_time || exam.end_date).toLocaleString()}</span>
+                        <span className="font-medium">{new Date(exam.end_date).toLocaleString()}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-gray-600">Duration:</span>
@@ -508,53 +474,6 @@ export default function StudentDashboard() {
                     >
                       <AlertCircle className="w-4 h-4" />
                       Exam Expired
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Unassigned Batched Exams */}
-        {unassignedExams.length > 0 && (
-          <div>
-            <h4 className="text-lg font-medium text-gray-600 mb-4 flex items-center gap-2">
-              <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
-              Awaiting Batch Assignment ({unassignedExams.length})
-            </h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {unassignedExams.map((exam) => (
-                <div key={exam.id} className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm opacity-75">
-                  <div className="space-y-4">
-                    <div>
-                      <h4 className="font-semibold text-gray-900">{exam.title}</h4>
-                      <p className="text-sm text-gray-500">
-                        {typeof exam.category === 'string' ? exam.category : exam.category?.name}
-                      </p>
-                    </div>
-
-                    <div className="space-y-2 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Duration:</span>
-                        <span className="font-medium">{exam.duration_minutes} min</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Questions:</span>
-                        <span className="font-medium">{paperQuestions(exam)}</span>
-                      </div>
-                    </div>
-
-                    <div className="px-3 py-1 rounded-full text-xs font-medium border text-gray-600 bg-gray-50 border-gray-200">
-                      NOT ASSIGNED TO A BATCH
-                    </div>
-
-                    <button
-                      disabled
-                      className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-gray-400 text-white rounded-lg cursor-not-allowed"
-                    >
-                      <AlertCircle className="w-4 h-4" />
-                      Contact Your Administrator
                     </button>
                   </div>
                 </div>
@@ -597,18 +516,12 @@ export default function StudentDashboard() {
                     </div>
                     <div className="flex justify-between">
                       <span>Start Time:</span>
-                      <span className="font-medium">{new Date(showExamModal.batch?.start_time || showExamModal.start_date).toLocaleString()}</span>
+                      <span className="font-medium">{new Date(showExamModal.start_date).toLocaleString()}</span>
                     </div>
                     <div className="flex justify-between">
                       <span>End Time:</span>
-                      <span className="font-medium">{new Date(showExamModal.batch?.end_time || showExamModal.end_date).toLocaleString()}</span>
+                      <span className="font-medium">{new Date(showExamModal.end_date).toLocaleString()}</span>
                     </div>
-                    {showExamModal.batch && (
-                      <div className="flex justify-between">
-                        <span>Your Batch:</span>
-                        <span className="font-medium">{showExamModal.batch.name}</span>
-                      </div>
-                    )}
                   </div>
                 </div>
                 

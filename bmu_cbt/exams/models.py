@@ -55,7 +55,7 @@ class Exam(models.Model):
         null=True,
         blank=True,
         validators=[MinValueValidator(1)],
-        help_text="Number of questions each batch paper randomly draws from the question bank. Leave blank to use all questions."
+        help_text="Number of questions randomly drawn from the question bank for each student's paper. Leave blank to use all questions."
     )
     passing_score = models.IntegerField(
         default=50,
@@ -129,58 +129,22 @@ class Exam(models.Model):
         return (self.status == 'published' and 
                 self.start_date <= now <= self.end_date)
 
+    def draw_paper(self, paper_size=None, rng=None):
+        """Randomly draw a paper from the exam's question bank.
 
-class ExamBatch(models.Model):
-    """A sitting/session of an exam. Students assigned to a batch can only
-    start the exam during that batch's window, and each batch gets its own
-    randomly-drawn paper from the exam's question bank."""
-    exam = models.ForeignKey(Exam, on_delete=models.CASCADE, related_name='batches')
-    name = models.CharField(max_length=100, help_text="e.g., Batch 1")
-    start_time = models.DateTimeField(help_text="When this batch's window opens")
-    end_time = models.DateTimeField(help_text="When this batch's window closes")
-    order = models.IntegerField(default=0, help_text="Display order of the batch")
-    students = models.ManyToManyField(
-        User,
-        blank=True,
-        related_name='exam_batches',
-        help_text="Students assigned to this batch"
-    )
-    questions = models.ManyToManyField(
-        'Question',
-        blank=True,
-        related_name='batch_papers',
-        help_text="The paper (randomly drawn questions) for this batch"
-    )
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        ordering = ['exam', 'order']
-        verbose_name = 'Exam Batch'
-        verbose_name_plural = 'Exam Batches'
-
-    def __str__(self):
-        return f"{self.exam.title} - {self.name}"
-
-    def is_window_open(self, now=None):
-        """Check if the batch window is currently open."""
-        now = now or timezone.now()
-        return self.start_time <= now <= self.end_time
-
-    def pick_paper(self, paper_size=None):
-        """Randomly draw the paper for this batch from the exam's question bank.
-        Returns the selected questions."""
-        pool = list(self.exam.questions.all())
+        Each student's paper is drawn independently when they start the exam.
+        Without `questions_per_paper` the whole bank is the paper. Pass a
+        seeded `random.Random` as `rng` for a deterministic draw.
+        """
+        pool = list(self.questions.all())
         if not pool:
-            self.questions.clear()
             return []
         if paper_size is None:
-            paper_size = self.exam.questions_per_paper or self.exam.total_questions or len(pool)
+            paper_size = self.questions_per_paper or len(pool)
         paper_size = max(1, min(int(paper_size), len(pool)))
-        random.shuffle(pool)
-        paper = pool[:paper_size]
-        self.questions.set(paper)
-        return paper
+        rng = rng or random
+        rng.shuffle(pool)
+        return pool[:paper_size]
 
 
 class Question(models.Model):

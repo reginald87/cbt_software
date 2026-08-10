@@ -16,13 +16,11 @@ class ExamAttempt(models.Model):
     
     student = models.ForeignKey(User, on_delete=models.CASCADE, related_name='exam_attempts')
     exam = models.ForeignKey(Exam, on_delete=models.CASCADE, related_name='attempts')
-    batch = models.ForeignKey(
-        'exams.ExamBatch',
-        on_delete=models.SET_NULL,
-        null=True,
+    questions = models.ManyToManyField(
+        Question,
         blank=True,
-        related_name='attempts',
-        help_text="The batch this attempt belongs to"
+        related_name='attempt_papers',
+        help_text="The random paper drawn for this attempt (empty = the full bank)"
     )
     
     # Attempt Details
@@ -87,7 +85,11 @@ class ExamAttempt(models.Model):
     def calculate_score(self):
         """Calculate the total score for this attempt"""
         with transaction.atomic():
-            total = self.exam.questions.aggregate(total=Sum('marks'))['total'] or 0
+            # Score against the attempt's paper when one was drawn, otherwise the full bank.
+            paper = self.questions.all()
+            if not paper.exists():
+                paper = self.exam.questions.all()
+            total = paper.aggregate(total=Sum('marks'))['total'] or 0
             total_marks = total
             obtained_marks = 0
 

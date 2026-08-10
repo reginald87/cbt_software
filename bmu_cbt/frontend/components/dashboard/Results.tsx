@@ -9,8 +9,6 @@ interface ExamResult {
   id: number
   exam_title: string
   exam_category?: string
-  batch_id?: number
-  batch_name?: string
   status: string
   percentage: number
   grade: string | null
@@ -27,7 +25,6 @@ export default function Results() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isDownloading, setIsDownloading] = useState(false)
-  const [filterBatchId, setFilterBatchId] = useState<string>('')
 
   useEffect(() => {
     if (!token) return
@@ -55,9 +52,6 @@ export default function Results() {
       const response = await api.get(
         `/results/export/exam-results/`,
         {
-          params: {
-            batch_id: filterBatchId ? Number(filterBatchId) : undefined
-          },
           responseType: 'blob'
         }
       )
@@ -104,24 +98,12 @@ export default function Results() {
     }
   }
 
-  const batches = Array.from(
-    new Map(
-      results
-        .filter((r) => r.batch_id)
-        .map((r) => [r.batch_id, { id: r.batch_id as number, name: r.batch_name || 'Unknown' }])
-    ).values()
-  )
-
-  const visibleResults = filterBatchId
-    ? results.filter((r) => r.batch_id === Number(filterBatchId))
-    : results
-
-  const averageScore = visibleResults.length > 0 
-    ? visibleResults.reduce((sum, r) => sum + (r.percentage || 0), 0) / visibleResults.length 
+  const averageScore = results.length > 0 
+    ? results.reduce((sum, r) => sum + (r.percentage || 0), 0) / results.length 
     : 0
 
-  const passRate = visibleResults.length > 0 
-    ? (visibleResults.filter(r => r.is_passed).length / visibleResults.length) * 100 
+  const passRate = results.length > 0 
+    ? (results.filter(r => r.is_passed).length / results.length) * 100 
     : 0
 
   if (isLoading) {
@@ -171,35 +153,13 @@ export default function Results() {
         </button>
       </div>
 
-      {/* Batch filter */}
-      {batches.length > 0 && (
-        <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 mb-6">
-          <label className="text-sm font-medium text-gray-600">Filter by batch:</label>
-          <select
-            value={filterBatchId}
-            onChange={(e) => setFilterBatchId(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="">All batches</option>
-            {batches.map((b) => (
-              <option key={b.id} value={b.id}>
-                {b.name}
-              </option>
-            ))}
-          </select>
-          <span className="text-sm text-gray-400">
-            {filterBatchId ? `${visibleResults.length} result(s) in this batch` : `${results.length} result(s) total`}
-          </span>
-        </div>
-      )}
-
       {/* Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-8">
         <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600">Total Exams</p>
-              <p className="text-2xl font-bold text-gray-900 mt-1">{visibleResults.length}</p>
+              <p className="text-2xl font-bold text-gray-900 mt-1">{results.length}</p>
             </div>
             <BookOpen className="w-8 h-8 text-blue-500" />
           </div>
@@ -210,7 +170,7 @@ export default function Results() {
             <div>
               <p className="text-sm font-medium text-gray-600">Passed</p>
               <p className="text-2xl font-bold text-green-600 mt-1">
-                {visibleResults.filter(r => r.is_passed).length}
+                {results.filter(r => r.is_passed).length}
               </p>
             </div>
             <CheckCircle className="w-8 h-8 text-green-500" />
@@ -222,7 +182,7 @@ export default function Results() {
             <div>
               <p className="text-sm font-medium text-gray-600">Failed</p>
               <p className="text-2xl font-bold text-red-600 mt-1">
-                {visibleResults.filter(r => !r.is_passed).length}
+                {results.filter(r => !r.is_passed).length}
               </p>
             </div>
             <XCircle className="w-8 h-8 text-red-500" />
@@ -248,7 +208,7 @@ export default function Results() {
           <h2 className="text-lg font-semibold text-gray-900">Exam History</h2>
         </div>
         
-        {visibleResults.length > 0 ? (
+        {results.length > 0 ? (
           <div className="overflow-x-auto -mx-4 sm:mx-0">
             <div className="min-w-full sm:min-w-0">
               <table className="w-full min-w-[600px] sm:min-w-0">
@@ -256,9 +216,6 @@ export default function Results() {
                   <tr>
                     <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Exam Title
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Batch
                     </th>
                     <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Date
@@ -278,7 +235,7 @@ export default function Results() {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {visibleResults.map((result) => (
+                  {results.map((result) => (
                     <tr key={result.id} className="hover:bg-gray-50 transition-colors">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm font-medium text-gray-900">
@@ -287,11 +244,6 @@ export default function Results() {
                         <div className="text-sm text-gray-500">
                           {result.exam_category}
                         </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-700">
-                          {result.batch_name || 'N/A'}
-                        </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm text-gray-900">

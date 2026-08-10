@@ -210,7 +210,7 @@ export default function TakeExam({ examId, attemptId, endTimeMs, onExit }: TakeE
 
       const [examRes, qRes, detailRes] = await Promise.all([
         api.get(`/exams/${examId}/`),
-        api.get(`/exams/${examId}/questions/`),
+        api.get(`/exams/${examId}/questions/?attempt_id=${attemptId}`),
         api.get(`/results/${attemptId}/`).catch(() => null),
       ])
 
