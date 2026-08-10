@@ -404,10 +404,6 @@ export default function StudentDashboard() {
 
                     <div className="space-y-2 text-sm">
                       <div className="flex justify-between">
-                        <span className="text-gray-600">Starts:</span>
-                        <span className="font-medium">{new Date(exam.start_date).toLocaleString()}</span>
-                      </div>
-                      <div className="flex justify-between">
                         <span className="text-gray-600">Duration:</span>
                         <span className="font-medium">{exam.duration_minutes} min</span>
                       </div>
@@ -454,10 +450,6 @@ export default function StudentDashboard() {
                     </div>
 
                     <div className="space-y-2 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Ended:</span>
-                        <span className="font-medium">{new Date(exam.end_date).toLocaleString()}</span>
-                      </div>
                       <div className="flex justify-between">
                         <span className="text-gray-600">Duration:</span>
                         <span className="font-medium">{exam.duration_minutes} min</span>
@@ -513,14 +505,6 @@ export default function StudentDashboard() {
                     <div className="flex justify-between">
                       <span>Passing Score:</span>
                       <span className="font-medium">{showExamModal.passing_score}%</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Start Time:</span>
-                      <span className="font-medium">{new Date(showExamModal.start_date).toLocaleString()}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>End Time:</span>
-                      <span className="font-medium">{new Date(showExamModal.end_date).toLocaleString()}</span>
                     </div>
                   </div>
                 </div>
