@@ -24,6 +24,7 @@ The BMU CBT System is a web-based examination platform that allows administrator
 
 - **Timed Exams** — Auto-submits when time expires
 - **Question Shuffling** — Randomised question and answer order per student
+- **Per-Student Papers** — If a "Questions per Student" limit is set, each student gets a random subset of the question bank, drawn when they start
 - **Multiple Question Types** — Multiple Choice, True/False, Fill-in-the-Blank, Short Answer, Math, Chemistry, Physics, Biology, Comprehension
 - **Auto-Grading** — MCQ, True/False, and Fill-in-the-Blank are graded automatically
 - **Security Monitoring** — Auto-submits the exam on the first tab switch, IP lock, session tracking
@@ -182,8 +183,9 @@ Git does **not** contain the virtual environment, Node packages, the built front
 | **Duration** | Time limit in minutes (5–480) |
 | **Passing Score** | Minimum percentage to pass (e.g., 50) |
 | **Start Date** | When students can begin the exam |
-| **End Date** | When the exam closes |
+| **End Date** | When the exam closes (no new starts after this) |
 | **Total Questions** | Number of questions in the exam |
+| **Questions per Student** | Random subset drawn for each student's paper (leave blank to give every student all questions) |
 
 4. Configure exam settings:
 
@@ -323,8 +325,10 @@ automatically (use `-->` for `→` and `<-->` for `⇌`).
 
 1. Open the exam from the Exams list
 2. Review the exam details and question count
-3. Click **Publish** (or change status from Draft → Active)
-4. The exam is now visible to students and they can start it within the date window
+4. Click **Publish** (or change status from Draft → Active)
+5. The exam is now visible to students and they can start it within the date window
+
+> **How the window and timer work:** the start/end dates only control **when a student may begin**. Once a student clicks Start, the full exam duration runs from *their* start time — a student who begins near the end of the window still gets the entire duration.
 
 ### 3.4 Managing Students
 
@@ -408,7 +412,7 @@ After login, you'll see the **Student Dashboard** showing:
 1. Click **Start Exam** on the exam card
 2. Read the exam instructions carefully
 3. Click **Begin Exam** when ready
-4. **Important:** Once started, the timer begins and cannot be paused
+4. **Important:** Once started, the timer begins and cannot be paused. It always runs for the full exam duration from your start time — starting late within the exam window does not shorten your time
 
 #### Answering Questions
 
@@ -517,10 +521,10 @@ After login, you'll see the **Student Dashboard** showing:
 ### Scoring Formula
 
 ```
-Percentage = (Total Marks Obtained / Total Exam Marks) × 100
+Percentage = (Total Marks Obtained / Total Paper Marks) × 100
 ```
 
-- **Total Exam Marks** = Sum of marks for ALL questions in the exam
+- **Total Paper Marks** = Sum of marks for all questions on the student's paper (the random subset drawn at start, or all questions in the exam if no subset is set)
 - **Total Marks Obtained** = Sum of marks for correctly answered questions only
 - Unanswered or incorrect questions contribute 0 marks
 
@@ -574,7 +578,7 @@ Percentage = (Total Marks Obtained / Total Exam Marks) × 100
 |-----------|------------|
 | **OS** | Windows 10/11 |
 | **Network** | Ethernet or Wi-Fi connection (same LAN as students) |
-| **Browser** | Chrome, Firefox, or Edge (latest version) |
+| **Browser** | Chrome, Firefox, or Microsoft Edge — **Chromium-based** (Edge 80+, Chrome 64+, Firefox 63+, Safari 12+). Legacy Microsoft Edge (EdgeHTML, e.g. v44) is **not supported** — update those machines to Chromium Edge or Chrome |
 | **Disk Space** | At least 1 GB free for recordings and media |
 | **RAM** | 4 GB minimum, 8 GB recommended |
 
