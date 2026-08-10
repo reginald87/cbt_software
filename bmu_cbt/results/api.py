@@ -8,7 +8,7 @@ from datetime import timedelta
 import uuid
 from results.models import ExamAttempt, StudentAnswer, Notification
 from results.utils import export_exam_results_to_csv, export_student_performance_csv
-from exams.models import Exam, Question, Answer
+from exams.models import Exam, Question, Answer, ExamBatch
 from users.models import User, UserSession
 from ninja.errors import HttpError
 from bmu_cbt.ninja_auth import JWTAuth
@@ -76,6 +76,8 @@ class ExamAttemptListSchema(BaseModel):
     exam_id: int
     exam_title: str
     exam_category: Optional[str] = None
+    batch_id: Optional[int] = None
+    batch_name: Optional[str] = None
     status: str
     percentage: Optional[float] = None
     grade: Optional[str] = None
@@ -119,6 +121,24 @@ def start_exam(request, exam_id: int):
     # Check if exam is available
     if not exam.is_available():
         raise HttpError(400, "Exam is not available")
+
+    # Batch gating: batched exams require a batch assignment and an open window.
+    batch = None
+    if exam.batches.exists():
+        batch = ExamBatch.objects.filter(exam=exam, students=student).first()
+        if not batch:
+            raise HttpError(403, "You are not assigned to a batch for this exam")
+        now = timezone.now()
+        if now < batch.start_time:
+            raise HttpError(
+                400,
+                f"Your batch ({batch.name}) starts at {batch.start_time.strftime('%Y-%m-%d %H:%M')}"
+            )
+        if now > batch.end_time:
+            raise HttpError(
+                400,
+                f"Your batch ({batch.name}) window has ended at {batch.end_time.strftime('%Y-%m-%d %H:%M')}"
+            )
     
     # Check if user already has an in-progress attempt
     existing_attempt = ExamAttempt.objects.filter(student=student, exam=exam).order_by('-start_time').first()
@@ -156,6 +176,7 @@ def start_exam(request, exam_id: int):
     attempt = ExamAttempt.objects.create(
         student=student,
         exam=exam,
+        batch=batch,
         ip_address=ip_address,
         user_agent=request.META.get('HTTP_USER_AGENT', '')
     )
@@ -196,7 +217,7 @@ def get_student_attempts(request):
     """Get all exam attempts for the current student"""
     attempts = ExamAttempt.objects.filter(
         student=request.user
-    ).select_related('exam', 'exam__category').order_by('-start_time')
+    ).select_related('exam', 'exam__category', 'batch').order_by('-start_time')
     
     return [
         {
@@ -204,6 +225,8 @@ def get_student_attempts(request):
             'exam_id': a.exam.id,
             'exam_title': a.exam.title,
             'exam_category': a.exam.category.name if a.exam.category else None,
+            'batch_id': a.batch.id if a.batch else None,
+            'batch_name': a.batch.name if a.batch else None,
             'status': a.status,
             'percentage': a.percentage,
             'grade': a.grade,
@@ -817,7 +840,7 @@ def get_all_attempts(request, exam_id: Optional[int] = Query(None)):
     if exam_id:
         attempts = attempts.filter(exam_id=exam_id)
     
-    attempts = attempts.select_related('exam', 'exam__category', 'student').order_by('-start_time')
+    attempts = attempts.select_related('exam', 'exam__category', 'student', 'batch').order_by('-start_time')
     
     return [
         {
@@ -825,6 +848,8 @@ def get_all_attempts(request, exam_id: Optional[int] = Query(None)):
             'exam_id': a.exam.id,
             'exam_title': a.exam.title,
             'exam_category': a.exam.category.name if a.exam.category else None,
+            'batch_id': a.batch.id if a.batch else None,
+            'batch_name': a.batch.name if a.batch else None,
             'status': a.status,
             'percentage': a.percentage,
             'grade': a.grade,
@@ -1149,13 +1174,13 @@ def get_proctoring_sessions(request):
 # ==================== Analytics Endpoints ====================
 
 @router.get("/export/exam-results/")
-def export_exam_results_csv(request):
-    """Export exam results to CSV (admin only)"""
+def export_exam_results_csv(request, exam_id: Optional[int] = Query(None), batch_id: Optional[int] = Query(None)):
+    """Export exam results to CSV (admin only). Optionally filter by exam and/or batch."""
     if not request.user.is_superuser:
         raise HttpError(403, "Admin access required")
     
     try:
-        return export_exam_results_to_csv()
+        return export_exam_results_to_csv(exam_id=exam_id, batch_id=batch_id)
     except Exception as e:
         raise HttpError(400, f"Error exporting results: {str(e)}")
 

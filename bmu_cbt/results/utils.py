@@ -5,26 +5,38 @@ import csv
 from datetime import datetime
 from django.http import HttpResponse
 from results.models import ExamAttempt, Notification
+from exams.models import ExamBatch
 from users.models import User
 
 
-def export_exam_results_to_csv(exam_id=None):
+def export_exam_results_to_csv(exam_id=None, batch_id=None):
     """
     Export exam results to CSV format
     Returns HttpResponse with CSV file
     """
     # Filter attempts
+    attempts = ExamAttempt.objects.filter(
+        status='graded'
+    ).select_related('student', 'exam', 'batch')
+
     if exam_id:
-        attempts = ExamAttempt.objects.filter(
-            exam_id=exam_id,
-            status='graded'
-        ).select_related('student', 'exam')
-        exam = attempts.first().exam if attempts.exists() else None
+        attempts = attempts.filter(exam_id=exam_id)
+    if batch_id:
+        attempts = attempts.filter(batch_id=batch_id)
+
+    # Build a descriptive filename
+    batch_label = None
+    if batch_id:
+        batch = ExamBatch.objects.filter(id=batch_id).first()
+        batch_label = (batch.name if batch else f"batch_{batch_id}").replace(' ', '_')
+
+    if exam_id and batch_label:
+        filename = f"exam_{exam_id}_{batch_label}_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+    elif exam_id:
         filename = f"exam_{exam_id}_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+    elif batch_label:
+        filename = f"{batch_label}_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
     else:
-        attempts = ExamAttempt.objects.filter(
-            status='graded'
-        ).select_related('student', 'exam')
         filename = f"all_exam_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
     
     # Create HTTP response
@@ -45,6 +57,7 @@ def export_exam_results_to_csv(exam_id=None):
         'Department',
         'Exam Title',
         'Exam Category',
+        'Batch',
         'Total Marks',
         'Percentage',
         'Grade',
@@ -71,6 +84,7 @@ def export_exam_results_to_csv(exam_id=None):
             student.department or 'N/A',
             exam.title,
             exam.category.name if exam.category else 'N/A',
+            attempt.batch.name if attempt.batch else 'N/A',
             attempt.total_marks or 0,
             f"{attempt.percentage:.1f}%" if attempt.percentage else 'N/A',
             attempt.grade or 'N/A',

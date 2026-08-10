@@ -16,6 +16,14 @@ class ExamAttempt(models.Model):
     
     student = models.ForeignKey(User, on_delete=models.CASCADE, related_name='exam_attempts')
     exam = models.ForeignKey(Exam, on_delete=models.CASCADE, related_name='attempts')
+    batch = models.ForeignKey(
+        'exams.ExamBatch',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='attempts',
+        help_text="The batch this attempt belongs to"
+    )
     
     # Attempt Details
     start_time = models.DateTimeField(auto_now_add=True)

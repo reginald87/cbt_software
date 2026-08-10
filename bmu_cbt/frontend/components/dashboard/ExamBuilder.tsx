@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import api from '@/utils/axios'
+import BatchesManager from './BatchesManager'
 import { 
   Plus, 
   Trash2, 
@@ -53,6 +54,7 @@ interface Exam {
   duration_minutes: number
   total_questions: number
   passing_score: number
+  questions_per_paper?: number
   difficulty_level: 'easy' | 'medium' | 'hard'
   category: string | null
   start_date: string
@@ -79,6 +81,7 @@ export default function ExamBuilder({ examId }: ExamBuilderProps) {
     duration_minutes: 60,
     total_questions: 0,
     passing_score: 50,
+    questions_per_paper: undefined,
     difficulty_level: 'medium',
     category: '',
     start_date: '',
@@ -94,7 +97,7 @@ export default function ExamBuilder({ examId }: ExamBuilderProps) {
   const [categories, setCategories] = useState([])
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [activeTab, setActiveTab] = useState<'details' | 'questions'>('details')
+  const [activeTab, setActiveTab] = useState<'details' | 'questions' | 'batches'>('details')
   const [showCategoryForm, setShowCategoryForm] = useState(false)
   const [newCategoryName, setNewCategoryName] = useState('')
   const [newCategoryCode, setNewCategoryCode] = useState('')
@@ -376,6 +379,7 @@ export default function ExamBuilder({ examId }: ExamBuilderProps) {
         shuffle_options: exam.shuffle_options,
         allow_review: exam.allow_review,
         total_questions: exam.total_questions,
+        questions_per_paper: exam.questions_per_paper || null,
         difficulty_level: exam.difficulty_level,
         status: publish ? 'published' : 'draft'
       }
@@ -742,6 +746,18 @@ export default function ExamBuilder({ examId }: ExamBuilderProps) {
           >
             Questions ({exam.questions.length})
           </button>
+          {exam.id && (
+            <button
+              onClick={() => setActiveTab('batches')}
+              className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors ${
+                activeTab === 'batches'
+                  ? 'border-primary-500 text-primary-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              Batches
+            </button>
+          )}
         </nav>
       </div>
 
@@ -863,6 +879,23 @@ export default function ExamBuilder({ examId }: ExamBuilderProps) {
             </div>
 
             <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Questions per Paper <span className="text-gray-400">(for batches)</span>
+              </label>
+              <input
+                type="number"
+                value={exam.questions_per_paper ?? ''}
+                onChange={(e) => setExam(prev => ({
+                  ...prev,
+                  questions_per_paper: e.target.value === '' ? undefined : parseInt(e.target.value) || 0,
+                }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                min="1"
+                placeholder="Leave blank to use all questions"
+              />
+            </div>
+
+            <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Passing Score (%)</label>
               <input
                 type="number"
@@ -974,6 +1007,8 @@ export default function ExamBuilder({ examId }: ExamBuilderProps) {
             </div>
           </div>
         </div>
+      ) : activeTab === 'batches' && exam.id ? (
+        <BatchesManager examId={exam.id} />
       ) : (
         <div className="space-y-6">
           {/* Add Question Buttons (sticky so they stay visible while adding many questions) */}
