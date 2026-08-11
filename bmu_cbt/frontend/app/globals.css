@@ -139,3 +139,90 @@ body {
 .scale-in {
   animation: scaleIn 0.2s ease-out;
 }
+
+/* ────────────────────────────────────────────────────────────
+   TakeExam low-glare (dark) theme.
+   Scoped to the exam screen via data-exam-theme="dark" so it
+   never leaks into the rest of the app.
+   ──────────────────────────────────────────────────────────── */
+[data-exam-theme='dark'] {
+  color-scheme: dark;
+}
+
+[data-exam-theme='dark'] .from-slate-50 {
+  --tw-gradient-from: #0f172a;
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to, #0f172a);
+}
+
+[data-exam-theme='dark'] .to-white {
+  --tw-gradient-to: #0b1120;
+}
+
+/* Surfaces */
+[data-exam-theme='dark'] .bg-white { background-color: #16213a; }
+[data-exam-theme='dark'] .bg-white\/90 { background-color: rgb(22 33 58 / 0.92); }
+[data-exam-theme='dark'] .bg-slate-50,
+[data-exam-theme='dark'] .bg-gray-50 { background-color: #0f1a2e; }
+[data-exam-theme='dark'] .bg-slate-100 { background-color: #1e293b; }
+[data-exam-theme='dark'] .bg-slate-200 { background-color: #334155; }
+[data-exam-theme='dark'] .bg-slate-800 { background-color: #1e293b; }
+[data-exam-theme='dark'] .bg-slate-900 { background-color: #0b1120; }
+[data-exam-theme='dark'] .bg-primary-50 { background-color: #172a45; }
+[data-exam-theme='dark'] .bg-primary-100 { background-color: #1d3a5f; }
+[data-exam-theme='dark'] .bg-primary-600 { background-color: #3b82f6; }
+[data-exam-theme='dark'] .bg-green-50 { background-color: #0c2b22; }
+[data-exam-theme='dark'] .bg-green-100 { background-color: #103a2c; }
+[data-exam-theme='dark'] .bg-red-50 { background-color: #2d1418; }
+[data-exam-theme='dark'] .bg-red-100 { background-color: #3a1a1f; }
+[data-exam-theme='dark'] .bg-blue-50 { background-color: #0f2540; }
+[data-exam-theme='dark'] .bg-warning-50 { background-color: #2d2410; }
+
+/* Text */
+[data-exam-theme='dark'] .text-slate-900,
+[data-exam-theme='dark'] .text-gray-900 { color: #e6edf7; }
+[data-exam-theme='dark'] .text-slate-700,
+[data-exam-theme='dark'] .text-gray-800,
+[data-exam-theme='dark'] .text-gray-700 { color: #cbd5e1; }
+[data-exam-theme='dark'] .text-slate-600,
+[data-exam-theme='dark'] .text-gray-600,
+[data-exam-theme='dark'] .text-blue-800 { color: #94a3b8; }
+[data-exam-theme='dark'] .text-slate-500,
+[data-exam-theme='dark'] .text-gray-500 { color: #94a3b8; }
+[data-exam-theme='dark'] .text-slate-400,
+[data-exam-theme='dark'] .text-gray-400 { color: #64748b; }
+[data-exam-theme='dark'] .text-primary-600,
+[data-exam-theme='dark'] .text-primary-700 { color: #93c5fd; }
+[data-exam-theme='dark'] .text-green-600,
+[data-exam-theme='dark'] .text-green-700 { color: #86efac; }
+[data-exam-theme='dark'] .text-red-600,
+[data-exam-theme='dark'] .text-red-700 { color: #fca5a5; }
+[data-exam-theme='dark'] .text-warning-600,
+[data-exam-theme='dark'] .text-warning-700 { color: #fcd34d; }
+
+/* Borders */
+[data-exam-theme='dark'] .border-slate-200,
+[data-exam-theme='dark'] .border-gray-200,
+[data-exam-theme='dark'] .border-blue-200 { border-color: #263449; }
+[data-exam-theme='dark'] .border-gray-300 { border-color: #334155; }
+[data-exam-theme='dark'] .border-green-200,
+[data-exam-theme='dark'] .border-green-300,
+[data-exam-theme='dark'] .border-green-400,
+[data-exam-theme='dark'] .border-green-600 { border-color: #166534; }
+[data-exam-theme='dark'] .border-red-200,
+[data-exam-theme='dark'] .border-red-300,
+[data-exam-theme='dark'] .border-red-400,
+[data-exam-theme='dark'] .border-red-600 { border-color: #7f1d1d; }
+[data-exam-theme='dark'] .border-primary-400,
+[data-exam-theme='dark'] .border-primary-600 { border-color: #3b82f6; }
+[data-exam-theme='dark'] .border-warning-400 { border-color: #b45309; }
+
+/* Hover states */
+[data-exam-theme='dark'] .hover\:bg-gray-50:hover { background-color: #1e293b; }
+[data-exam-theme='dark'] .hover\:bg-slate-50:hover { background-color: #1e293b; }
+[data-exam-theme='dark'] .hover\:bg-green-100:hover { background-color: #103a2c; }
+[data-exam-theme='dark'] .hover\:bg-primary-700:hover { background-color: #1d4ed8; }
+[data-exam-theme='dark'] .hover\:bg-slate-800:hover { background-color: #0b1120; }
+
+/* Focus rings */
+[data-exam-theme='dark'] .focus\:ring-primary-200:focus { --tw-ring-color: #1e40af; }
+[data-exam-theme='dark'] .ring-primary-400\/40 { --tw-ring-color: rgb(96 165 250 / 0.4); }

@@ -29,11 +29,13 @@ export default function KaTeXRenderer({ math, display = 'inline', className = ''
       }
 
       const script = document.createElement('script')
-      script.src = 'https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js'
+      // Self-hosted copy (node_modules/katex -> public/katex) because the exam
+      // network has no internet access to a CDN.
+      script.src = '/katex/katex.min.js'
       script.onload = () => {
         const link = document.createElement('link')
         link.rel = 'stylesheet'
-        link.href = 'https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css'
+        link.href = '/katex/katex.min.css'
         document.head.appendChild(link)
         
         setTimeout(renderMath, 100)

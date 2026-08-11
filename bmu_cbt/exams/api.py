@@ -280,6 +280,47 @@ def get_current_exam(request):
     }
 
 
+@router.get("/available/")
+def list_available_exams(request):
+    """Exams currently available to the logged-in student.
+
+    Only exams that are published (active) AND inside their live window are
+    returned — draft, closed, upcoming, and expired exams stay invisible to
+    students. The backend is the source of truth; the dashboard renders only
+    what this endpoint returns.
+    """
+    now = timezone.now()
+    exams = (
+        Exam.objects.select_related('category')
+        .filter(status__in=['published', 'active'], start_date__lte=now, end_date__gte=now)
+        .order_by('start_date')
+    )
+
+    return [
+        {
+            'id': exam.id,
+            'title': exam.title,
+            'category': {
+                'id': exam.category.id,
+                'code': exam.category.code,
+                'name': exam.category.name,
+                'description': exam.category.description,
+            },
+            'description': exam.description,
+            'instructions': exam.instructions,
+            'duration_minutes': exam.duration_minutes,
+            'total_questions': exam.total_questions,
+            'passing_score': exam.passing_score,
+            'status': _to_api_exam_status(exam.status),
+            'start_date': exam.start_date.isoformat() if exam.start_date else '',
+            'end_date': exam.end_date.isoformat() if exam.end_date else '',
+            'server_time': timezone.now().isoformat(),
+            'questions_per_paper': exam.questions_per_paper,
+        }
+        for exam in exams
+    ]
+
+
 def _questions_with_answers(exam, questions=None):
     """Load questions and their (ordered) answers without N+1 queries.
 

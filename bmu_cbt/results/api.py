@@ -217,6 +217,40 @@ def get_student_attempts(request):
         for a in attempts
     ]
 
+
+@router.get("/current-session/")
+def get_current_session(request):
+    """Return the student's active (in-progress) exam session, if any.
+
+    The dashboard needs this to restore the "Exam in Progress" banner and
+    countdown after a page reload, since the per-attempt check-session
+    endpoint requires an attempt id the dashboard may not know yet.
+    """
+    attempt = (
+        ExamAttempt.objects.filter(student=request.user, status='in_progress')
+        .select_related('exam')
+        .order_by('-start_time')
+        .first()
+    )
+    if not attempt:
+        return {"active": False}
+
+    now = timezone.now()
+    end_time = attempt.start_time + timedelta(minutes=attempt.exam.duration_minutes)
+    remaining_seconds = max(0, int((end_time - now).total_seconds()))
+
+    return {
+        "active": True,
+        "session": {
+            "exam_id": attempt.exam_id,
+            "attempt_id": attempt.id,
+            "start_time": attempt.start_time.isoformat(),
+            "remaining_seconds": remaining_seconds,
+            "ip_address": attempt.ip_address,
+            "session_key": "",
+        },
+    }
+
 # ==================== Admin Endpoints ====================
 
 @router.get("/debug-attempt/{attempt_id}/")

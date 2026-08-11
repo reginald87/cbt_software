@@ -200,13 +200,6 @@ export default function WebcamMonitor({ examId, attemptId, token, isActive }: We
           height: '1px'
         }}
       />
-
-      {/* Debug indicator (remove in production) */}
-      {process.env.NODE_ENV === 'development' && (
-        <div className="fixed bottom-4 left-4 text-xs text-gray-400 opacity-50">
-          Webcam: {permissionStatus} | Captures: {captureCount}
-        </div>
-      )}
     </>
   )
 }
